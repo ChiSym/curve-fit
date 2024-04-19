@@ -1,29 +1,59 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + TS</title>
-  </head>
-  <body>
-    <div id="app">
-      <a href="https://vitejs.dev" target="_blank">
-        <img id="vitelogo" class="logo" alt="Vite logo" />
-      </a>
-      <a href="https://www.typescriptlang.org/" target="_blank">
-        <img id="tslogo" class="logo vanilla" alt="TypeScript logo" />
-      </a>
-      <br/>
-      <canvas id="c"></canvas>
-      <h1>Vite + TypeScript</h1>
-      <div class="card">
-        <button id="counter" type="button"></button>
-      </div>
-      <p class="read-the-docs">
-        Click on the Vite and TypeScript logos to learn more
-      </p>
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIR Curve Fit</title>
+</head>
+
+<body>
+  <div id="app">
+    <br />
+    <h1>SIR Curve Fit</h1>
+    <canvas id="c"></canvas><br>
+    FPS: <span id="fps"></span><br>
+    IPS: <span id="ips"></span><br>
+
+    <div id="controls">
+      <span>a<sub>0</sub> &mu; : </span>
+      <input type="range" min="-1" max = "1" step=".01" value="0" id="a0_mu">
+      <span id="a0_mu-value"></span>
+      &nbsp;&nbsp;<span class="posterior" id="a0_mu-posterior"></span><br>
+      <span>a<sub>0</sub> &sigma; : </span>
+      <input type="range" min="0" max = "2" step=".01" value="2" id="a0_sigma">
+      <span id="a0_sigma-value"></span>
+      &nbsp;&nbsp;<span class="posterior" id="a0_sigma-posterior"></span><br>
+
+
+      <span>a<sub>1</sub> &mu; : </span>
+      <input type="range" min="-1" max = "1" step=".01" value="0" id="a1_mu">
+      <span id="a1_mu-value"></span>
+      &nbsp;&nbsp;<span class="posterior" id="a1_mu-posterior"></span><br>
+      <span>a<sub>1</sub> &sigma; : </span>
+      <input type="range" min="0" max = "2" step=".01" value="2" id="a1_sigma">
+      <span id="a1_sigma-value"></span>
+      &nbsp;&nbsp;<span class="posterior" id="a1_sigma-posterior"></span><br>
+
+      <span>a<sub>2</sub> &mu; : </span>
+      <input type="range" min="-1" max = "1" step=".01" value="0" id="a2_mu">
+      <span id="a2_mu-value"></span>
+      &nbsp;&nbsp;<span class="posterior" id="a2_mu-posterior"></span><br>
+      <span>a<sub>2</sub> &sigma; : </span>
+      <input type="range" min="0" max = "2" step=".01" value="2" id="a2_sigma">
+      <span id="a2_sigma-value"></span>
+      &nbsp;&nbsp;<span class="posterior" id="a2_sigma-posterior"></span><br>
+
+      p_outlier: <span id="p_outlier"></span><br>
     </div>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+
+    <div class="card">
+      <button id="sir" type="button">Update my priors, SIR!</button>
+      <button id="reset-priors" type="button">Reset</button>
+    </div>
+  </div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
 </html>

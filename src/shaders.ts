@@ -1,4 +1,8 @@
 export const pcg3d = /*glsl*/ `
+
+// The rules: if you use any part of the seed, it's your responsibility
+// to call this routine to mutate the seed for the next user.
+
 uvec3 pcg3d(uvec3 v) {
   // Citation: Mark Jarzynski and Marc Olano, Hash Functions for GPU Rendering,
   // Journal of Computer Graphics Techniques (JCGT), vol. 9, no. 3, 21-38, 2020
@@ -10,17 +14,36 @@ uvec3 pcg3d(uvec3 v) {
   v.x += v.y*v.z; v.y += v.z*v.x; v.z += v.x*v.y;
   return v;
 }
-
-void split(inout uvec3 key, out uvec3 sub_key) {
-  sub_key = pcg3d(key);
-  key = pcg3d(sub_key);
-}
 `
+
+export const beta = /*glsl*/ `
+
+const float lgamma_coef[] = float[6](
+  76.18009172947146,
+  -86.50532032941677,
+  24.01409824083091,
+  -1.231739572450155,
+  0.1208650973866179e-2,
+  -0.5395239384953e-5
+);
+
+float lgamma(float xx) {
+  // Numerical Recipes in C++ 2ed. p.219
+  float y = xx, x = xx, tmp = xx + 5.5;
+  tmp -= (x+0.5)*log(tmp);
+  float ser =  1.000000000190015;
+  for (int j = 0; j < 6; ++j) ser += lgamma_coef[j]/++y;
+  return -tmp+log(2.5066282746310005*ser/x);
+}
+
+`
+
 
 export const random_uniform = /*glsl*/ `
 // recovered from de-compiled JAX
-float random_uniform(uvec3 seed, float low, float high) {
+float random_uniform(inout uvec3 seed, float low, float high) {
   float a = uintBitsToFloat(seed.x >> 9u | 1065353216u) - 1.0;
+  seed = pcg3d(seed);
   float diff = high - low;
   float w = diff * a;
   float u = w + low;
@@ -45,7 +68,7 @@ float logpdf_uniform(float v, float low, float high) {
 `
 
 export const flip = /*glsl*/ `
-bool flip(uvec3 seed, float prob) {
+bool flip(inout uvec3 seed, float prob) {
   if (prob >= 1.0) return true;
   float a = random_uniform(seed, 0.0, 1.0);
   return a < prob;
@@ -97,14 +120,14 @@ float inv_erf(float x){
 `
 
 export const random_normal = /*glsl*/ `
-float random_normal(uvec3 seed, float loc, float scale) {
+float random_normal(inout uvec3 seed, float loc, float scale) {
   float u = sqrt(2.0) * inv_erf(random_uniform(seed, -1.0, 1.0));
   return loc + scale * u;
 }
 `
 
 export const logpdf_normal = /*glsl*/ `
-// Decompiled from JAX genjax.normal.logpdf
+// De-compiled from JAX genjax.normal.logpdf
 float logpdf_normal(float v, float loc, float scale) {
   float d = v / scale;
   float e = loc / scale;
@@ -119,6 +142,7 @@ float logpdf_normal(float v, float loc, float scale) {
 
 export const compute_shader = /*glsl*/ `#version 300 es
   ${pcg3d}
+  ${beta}
   ${random_uniform}
   ${logpdf_uniform}
   ${flip}
@@ -132,24 +156,22 @@ export const compute_shader = /*glsl*/ `#version 300 es
   #define N_POLY 3
   #define N_SAMPLES 50
 
-  uniform float xs[N_POINTS];
-  uniform float ys[N_POINTS];
+  uniform vec2 points[N_POINTS];
+  uniform vec3 alpha_loc;
+  uniform vec3 alpha_scale;
 
-  in float a;
+  in uvec3 seed;
   out vec3 model;
   flat out uint outliers;
   out float weight;
+  out vec3 params;
 
-  vec3 sample_alpha(uvec3 key) {
-    uvec3 sub_key;
-    vec3 alpha;
-    split(key, sub_key);
-    alpha[0] = random_normal(sub_key, 0.0, 2.0);
-    split(key, sub_key);
-    alpha[1] = random_normal(sub_key, 0.0, 2.0);
-    split(key, sub_key);
-    alpha[2] = random_normal(sub_key, 0.0, 2.0);
-    return alpha;
+  vec3 sample_alpha(inout uvec3 seed) {
+    return vec3(
+      random_normal(seed, alpha_loc[0], alpha_scale[0]),
+      random_normal(seed, alpha_loc[1], alpha_scale[1]),
+      random_normal(seed, alpha_loc[2], alpha_scale[2])
+    );
   }
 
   float evaluate_poly(vec3 coefficients, float x) {
@@ -160,11 +182,12 @@ export const compute_shader = /*glsl*/ `#version 300 es
     uint outliers;
     vec3 model;
     float weight;
+    float p_outlier;
   };
 
-  result curve_fit_importance(uvec3 key) {
+  result curve_fit_importance(inout uvec3 seed) {
     // Find the importance of the model generated from
-    // coefficients. The "choicemap" in this case is one
+    // coefficients. The "choice map" in this case is one
     // that sets the ys to the observed values. The model
     // has an outlier probability, two normal ranges for
     // inlier and outlier, and a fixed set of xs. We generate
@@ -174,49 +197,26 @@ export const compute_shader = /*glsl*/ `#version 300 es
     // the model.
     float w = 0.0;
     uint outliers = 0u;
-    uvec3 sub_key;
-    split(key, sub_key);
-    vec3 coefficients = sample_alpha(sub_key);
+    vec3 coefficients = sample_alpha(seed);
+    float p_outlier = random_uniform(seed, 0.0, 1.0);
     for (int i = 0; i < N_POINTS; ++i) {
-      split(key, sub_key);
-      bool outlier = flip(sub_key, 0.1);
+      bool outlier = flip(seed, p_outlier);
       outliers = outliers | (uint(outlier) << i);
-      float y_model = evaluate_poly(coefficients, xs[i]);
-      float y_observed = ys[i];
-      w += logpdf_normal(y_observed, y_model, outlier ? 30.0 : 0.3);
+      float y_model = evaluate_poly(coefficients, points[i].x);
+      float y_observed = points[i].y;
+      w += logpdf_normal(y_observed, y_model, outlier ? 3.0 : 0.3);
     }
-    return result(outliers, coefficients, w);
+    return result(outliers, coefficients, w, p_outlier);
   }
 
 
   void main() {
-    uvec3 key = pcg3d(uvec3(uint(a), ~uint(a), 877)), sub_key;
-    split(key, sub_key);
-    result r = curve_fit_importance(sub_key);
+    uvec3 seed = pcg3d(seed);
+    result r = curve_fit_importance(seed);
     outliers = r.outliers;
     weight = r.weight;
     model = r.model;
+    params = vec3(r.p_outlier);
+    //params.x = r.p_outlier;
   }
-`
-
-export const render_shader = /*glsl*/ `#version 300 es
-precision highp float;
-#define N_POINTS 10
-uniform vec2 canvas_size;
-//uniform vec2 points[N_POINTS];
-out vec4 out_color;
-//uniform vec3 models[];
-
-void main() {
-  // Map pixel coordinates [0,w) x [0,h) to the unit square [-1, 1) x [-1, 1)
-  vec2 xy = gl_FragCoord.xy / canvas_size.xy * 2.0 + vec2(-1.0,-1.0);
-  vec2 o = vec2(0.0, 0.0);
-  float d = distance(xy,o);
-  // might need a smoothstep in here to antialias
-  if (d < 0.05) {
-    out_color = vec4(1.0,0.0,0.0,1.0);
-  } else {
-    out_color = vec4(0.8,0.8,0.8,1.0);
-  }
-}
 `

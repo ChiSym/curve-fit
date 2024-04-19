@@ -1,14 +1,15 @@
 import './style.css'
-import typescriptLogo from './typescript.svg'
-import viteLogo from '/vite.svg'
-import { setupCounter } from './counter.ts'
-import { webgl } from './webgl.ts'
-import { compute_shader, render_shader } from './shaders.ts'
+// import { setupCounter } from './counter.ts'
+import { GPGPU_Inference } from './gpgpu.ts'
+import { Render } from './render.ts'
+import { Normal } from './model.ts'
 
-document.querySelector<HTMLImageElement>('#vitelogo')!.src = viteLogo
-document.querySelector<HTMLImageElement>('#tslogo')!.src = typescriptLogo
 
-setupCounter(document.querySelector<HTMLButtonElement>('#counter')!)
+
+const MODEL_SIZE = 3
+
+const points = [-.5,-.4,-.3,-.2,-.1,0,.1,.2,.3,.4].map(x => [x, .7*x - .2 + 0.2 *x*x])
+points[2][1] = +.9
 
 function log(level: string, message: any): void {
   if (level == 'error') {
@@ -23,362 +24,162 @@ function log(level: string, message: any): void {
   document.querySelector('#app')?.appendChild(d)
 }
 
-function uniform(low: number, high: number): number {
-  const r = Math.random()
-  return low + (high - low) * r
-}
+class RunningStats {
+  // https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford%27s_online_algorithm
+  private count: number
+  private mean: number
+  private m2: number
 
-function rectangle(gl: WebGL2RenderingContext, x0: number, y0: number, x1: number, y1: number) {
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-    x0, y0,
-    x1, y0,
-    x0, y1,
-    x0, y1,
-    x1, y0,
-    x1, y1
-  ]), gl.STATIC_DRAW)
-  gl.drawArrays(gl.TRIANGLES, 0, 6)
-}
-
-// use the texture hack to sample from a distribution on the GPU
-// use the texture hack to sample from a distribution on the GPU
-
-
-// genjax intro interpreted data
-
-// xs = jnp.array([0.3, 0.7, 1.1, 1.4, 2.3, 2.5, 3.0, 4.0, 5.0])
-// ys = jnp.array(2.0 * xs + 1.5 + xs**2)
-// ys = ys.at[2].set(50.0)
-
-// TODO: find a less nested way to do this
-
-
-
-
-async function boxes() {
-  const vs = `#version 300 es
-    in vec4 a_position;
-    uniform mat4 u_matrix;
-    void main() {
-      gl_Position = u_matrix * a_position;
-    }`
-
-  const fs = `#version 300 es
-    // fragment shaders don't have a default precision so we need
-    // to pick one. highp is a good default. It means "high precision"
-    precision highp float;
-
-    uniform vec4 u_color;
-
-    // we need to declare an output for the fragment shader
-    out vec4 outColor;
-
-    void main() {
-      outColor = u_color;
-    }`
-  const wgl: webgl = new webgl(document.querySelector('#c')!)
-  const gl = wgl.gl
-  const program = await wgl.createProgram(vs, fs)
-  const colorLocation = gl.getUniformLocation(program, 'u_color')
-  const matrixLocation = gl.getUniformLocation(program, 'u_matrix')
-
-  // looking up attribute/uniform locations is something to do during setup, not render loop
-  const positionAttributeLocation = gl.getAttribLocation(program, "a_position")
-  // attributes get their data from buffers
-  const positionBuffer = gl.createBuffer()
-  // first you bind a resource to a bind point. then all other fns refer to the resource thru the bind point. bind the position buffer
-  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
-  // use the bind point to put data in the buffer
-
-
-  // ======
-
-
-
-  // it used the positionBuffer because we bound it to ARRAY_BUFFER above.
-  // Now that we have the data in the buffer we need to tell the attribute how
-  // to get data out of it.
-  const vao = gl.createVertexArray()
-  // make that vertex array current
-  gl.bindVertexArray(vao)
-  // turn the attribute on, so webgl will get data out of a buffer, else it will have constant value
-  gl.enableVertexAttribArray(positionAttributeLocation)
-  gl.vertexAttribPointer(
-    positionAttributeLocation,
-    2, /* size */
-    gl.FLOAT, /* type */
-    false, /* normalize */
-    0, /* stride */
-    0, /* offset */
-  )
-
-  // NB: the current ARRAY_BUFFER is bound to the attribute; i.e., the
-  // attribute is bound to positionBuffer. This means we are now free to
-  // rebind the ARRAY_BUFFER bind point. The attribute will carry on using
-  // positionBuffer from now on.
-
-  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
-  gl.enable(gl.BLEND)
-  gl.clearColor(0, 0, 0, 0)
-  gl.clear(gl.COLOR_BUFFER_BIT)
-  gl.useProgram(program)
-  // ====== SET UP SCENE
-  // const positions = [0,0, 0,0.5, 0.7, 0]
-  // gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW)
-  gl.uniformMatrix4fv(matrixLocation, true, [
-    1, 0, 0, 0,
-    0, 1, 0, 0,
-    0, 0, 1, 0,
-    0, 0, 0, 1
-  ])
-  const draw = () => uniform(-1, 1)
-  for (let i = 0; i < 100; ++i) {
-    let a = draw(), b = draw(), c = draw(), d = draw();
-    gl.uniform4f(colorLocation, Math.random(), Math.random(), Math.random(), .9)
-    rectangle(gl, a, b, c, d)
-  }
-}
-
-const MODEL_SIZE = 3
-
-
-async function gpgpu(n_trials: number) {
-  const w = 2
-  const h = 10
-  const canvas = document.createElement('canvas')
-  canvas.width = w
-  canvas.height = h
-  const wgl = new webgl(canvas)
-  const gl = wgl.gl
-
-  log('info', `A ${gl.canvas.width} x ${gl.canvas.height}`)
-
-  const compute_fs = `#version 300 es
-    precision highp float;
-    void main() {
-    }
-  `
-
-  const program = await wgl.createProgram(compute_shader, compute_fs, [
-    'model',
-    'outliers',
-    'weight'
-  ])
-
-  const aLoc = gl.getAttribLocation(program, 'a')
-  // Create a VAO for the attribute state
-  const vao = gl.createVertexArray();
-  gl.bindVertexArray(vao)
-
-  const makeBufferAndSetAttribute = (data: AllowSharedBufferSource, loc: number): WebGLBuffer => {
-    const buf = wgl.makeBuffer(data)
-    if (!buf) throw new Error('unable to create buffer')
-    gl.enableVertexAttribArray(loc)
-    gl.vertexAttribPointer(
-      loc,
-      1,  // size (num components)
-      gl.FLOAT,
-      false,
-      0,
-      0
-    )
-    return buf
+  constructor() {
+    this.count = 0
+    this.mean = 0
+    this.m2 = 0
   }
 
-  // One GPU thread will be created for each element in the array `a`.
-  // The array is filled with the integers [0..n_trials), so each
-  // thread will receive a different integer in its a value; these
-  // can be used as PRNG seeds
-  const a = Array.from({ length: n_trials }, (_, i) => i)
-  const aBuf = makeBufferAndSetAttribute(new Float32Array(a), aLoc)
+  observe(value: number) {
+    this.count += 1
+    const delta = value - this.mean
+    this.mean += delta / this.count
+    const delta2 = value - this.mean
+    this.m2 += delta * delta2
+  }
 
-  // The vertex arrays (above) are for the INPUT.
-  // The transform feedback (below) is for the OUTPUT.
-
-  const tf = gl.createTransformFeedback()
-  gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, tf)
-
-  const modelBuffer = wgl.makeBuffer(a.length * MODEL_SIZE * Float32Array.BYTES_PER_ELEMENT)
-  const outliersBuffer = wgl.makeBuffer(a.length * Uint32Array.BYTES_PER_ELEMENT)
-  const weightBuffer = wgl.makeBuffer(a.length * Float32Array.BYTES_PER_ELEMENT)
-
-  gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, modelBuffer)
-  gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 1, outliersBuffer)
-  gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 2, weightBuffer)
-
-  gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null)
-  gl.bindBuffer(gl.ARRAY_BUFFER, null)
-
-  const xsLoc = gl.getUniformLocation(program, 'xs')
-  const ysLoc = gl.getUniformLocation(program, 'ys')
-
-  const computation = () => {
-    // DO THE COMPUTE PART
-    gl.useProgram(program)
-
-
-    // Send `xs` array to GPU
-    const xs = [-.5, -.4, -.3, -.2, -.1, 0, .1, .2, .3, .4]
-    gl.uniform1fv(xsLoc, xs, 0, 10)
-    // send `ys` array to GPU
-    const ys = [.1, 50, .1, .2, .7, .3, .2, .1, .9, .3]
-    gl.uniform1fv(ysLoc, xs, 0, 10)
-
-    gl.bindVertexArray(vao)
-    gl.enable(gl.RASTERIZER_DISCARD)
-    gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, tf)
-    gl.beginTransformFeedback(gl.POINTS)
-    gl.drawArrays(gl.POINTS, 0, a.length)
-    gl.endTransformFeedback()
-    gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null)
-    gl.disable(gl.RASTERIZER_DISCARD)
-    // END COMPUTE PART
-
-    // INSPECT RESULTS
+  summarize() {
     return {
-      model: wgl.uploadFloats(modelBuffer!, a.length * MODEL_SIZE),
-      outliers: wgl.uploadUints(outliersBuffer!, a.length),
-      weight: wgl.uploadFloats(weightBuffer!, a.length)
+      mu: this.mean,
+      sigma: Math.sqrt(this.m2 / (this.count - 1))
     }
   }
 
-  const cleanup = () => {
-    gl.deleteBuffer(aBuf)
-    gl.deleteBuffer(modelBuffer)
-    gl.deleteBuffer(outliersBuffer)
-    gl.deleteBuffer(weightBuffer)
+  reset() {
+    this.count = 0;
+    this.mean = 0;
+    this.m2 = 0;
+  }
+}
+
+const initial_alpha = () => [
+  {mu: 0, sigma: 2},
+  {mu: 0, sigma: 2},
+  {mu: 0, sigma: 2}
+]
+
+function main() {
+  let samples_per_batch = 10000
+  let batches_per_frame = 20
+  const stats = Array.from({ length: MODEL_SIZE }, () => new RunningStats)
+
+  let alpha: Normal[] = initial_alpha()
+
+  function setupSlider(element_name: string, effect: (value: number) => void) {
+    const elt = document.querySelector<HTMLInputElement>(element_name)
+    const v_elt = document.querySelector<HTMLSpanElement>(element_name + '-value')
+    if (elt) {
+      elt.addEventListener('input', event => {
+        const target = event.target as HTMLInputElement
+        effect(target.valueAsNumber)
+        if (v_elt) {
+          v_elt.innerText = target.value
+        }
+      })
+      if (v_elt) {
+        v_elt.innerText = elt.valueAsNumber.toFixed(2)
+      }
+    }
+    return elt
   }
 
-  return Promise.resolve({
-    computation: computation,
-    cleanup: cleanup
+  setupSlider('#a0_mu', v => { alpha[0].mu = v })
+  setupSlider('#a0_sigma', v => { alpha[0].sigma = v })
+  setupSlider('#a1_mu', v => { alpha[1].mu = v })
+  setupSlider('#a1_sigma', v => { alpha[1].sigma = v })
+  setupSlider('#a2_mu', v => { alpha[2].mu = v })
+  setupSlider('#a2_sigma', v => { alpha[2].sigma = v })
+
+  const gpu = new GPGPU_Inference(samples_per_batch)
+  const renderer = new Render()
+
+  let point_eviction_index = 0;
+  renderer.canvas.addEventListener('click', event => {
+    const target = event.target as HTMLCanvasElement
+    const rect = target.getBoundingClientRect()
+    const x = (event.clientX - rect.left) / target.width * 2.0 - 1.0
+    const y = (event.clientY - rect.top) / target.height * -2.0 + 1.0
+
+    points[point_eviction_index][0] = x
+    points[point_eviction_index][1] = y
+    if (++point_eviction_index >= points.length) {
+      point_eviction_index = 0
+    }
   })
+
+  function setSliderValues(values: Normal[]) {
+    for (let i = 0; i < MODEL_SIZE; ++i) {
+      for (let k of ['mu', 'sigma']) {
+        const elt = document.querySelector<HTMLInputElement>(`#a${i}_${k}`)!
+        elt.value = values[i][k as keyof Normal].toFixed(2).toString()
+        elt.dispatchEvent(new CustomEvent('input'))
+      }
+      stats[i].reset()
+    }
+  }
+
+  document.querySelector<HTMLButtonElement>('#sir')?.addEventListener('click', () => {
+    setSliderValues(stats.map(s => s.summarize(), [stats.keys()]))
+  })
+
+  document.querySelector<HTMLButtonElement>('#reset-priors')?.addEventListener('click', () => {
+    alpha = initial_alpha()
+    setSliderValues(alpha)
+  })
+
+  let frame_count = 0;
+  let t0 = 0;
+
+  function frame(t: DOMHighResTimeStamp) {
+    try {
+      const { selected_models, ips } = gpu.inference(batches_per_frame, {
+        points: points,
+        alpha: alpha
+      })
+
+      for (const m of selected_models) {
+        for (let i = 0; i < MODEL_SIZE; ++i) {
+          stats[i].observe(m.model[i])
+        }
+      }
+      if (t0 == 0) {
+        t0 = t
+      }
+      ++frame_count
+      if (frame_count % 200 == 0) {
+        const fps = Math.trunc(frame_count / ((t - t0)/1e3))
+        document.querySelector<HTMLSpanElement>('#fps')!.innerText = fps.toString()
+        document.querySelector<HTMLSpanElement>('#ips')!.innerText = `${(ips / 1e6).toFixed(1)} M`
+        frame_count = 0
+        t0 = 0
+      }
+      if (frame_count % 50 == 0) {
+        for (let i = 0; i < MODEL_SIZE; ++i) {
+          const s = stats[i].summarize()
+          document.querySelector<HTMLSpanElement>(`#a${i}_mu-posterior`)!.innerText = s.mu.toFixed(2).toString()
+          document.querySelector<HTMLSpanElement>(`#a${i}_sigma-posterior`)!.innerText = s.sigma.toFixed(2).toString()
+        }
+      }
+      // const ols = selected_models.map(m => m.p_outlier.toFixed(2).toString()).join(', ')
+      // document.querySelector<HTMLSpanElement>('#p_outlier')!.innerText = ols
+      renderer.render(points, selected_models)
+      requestAnimationFrame(frame)
+    } catch (error) {
+      log('error', error)
+    }
+  }
+
+  requestAnimationFrame(frame)
 }
 
-async function render(points) {
-  const canvas = document.createElement('canvas')
-  canvas.width = 300
-  canvas.height = 300
-  document.querySelector('#app')?.appendChild(canvas)
-  const wgl = new webgl(canvas)
-  const gl = wgl.gl
-  gl.getContextAttributes
-
-  const vs = `#version 300 es
-  in vec4 a_position;
-  void main() {
-    gl_Position = a_position;
-  }`
-
-  const program = await wgl.createProgram(vs, render_shader)
-  const positionLoc = gl.getAttribLocation(program, 'a_position')!
-  const pointsLoc = gl.getUniformLocation(program, 'points')
-  //gl.uniform2fv(pointsLoc, points, 0, 10 * 2)
-  const canvasSizeLoc = gl.getUniformLocation(program, 'canvas_size')
-
-  // Set up full canvas clip space quad (this is two triangles that
-  // together cover the space [-1,1] x [-1,1], the point being that
-  // we want to run the fragment shader for every pixel in the "texture".)
-  const buffer = gl.createBuffer()
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-    -1, -1,
-    1, -1,
-    -1, 1,
-    -1, 1,
-    1, -1,
-    1, 1]), gl.STATIC_DRAW)
-  // Create a VAO for the attribute state
-  const vao = gl.createVertexArray();
-  gl.bindVertexArray(vao)
-  // Tell WebGL how to pull data from the above array into
-  // the position attribute of the vertex shader
-  gl.enableVertexAttribArray(positionLoc)
-  gl.vertexAttribPointer(
-    positionLoc,
-    2, /* count */
-    gl.FLOAT, /* type */
-    false, /* normalized */
-    0, /* stride */
-    0 /* offset */
-  )
-
-
-
-  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
-  gl.useProgram(program)
-  log('info', `ren canv ${canvas.width}, ${canvas.height}`)
-  gl.uniform2f(canvasSizeLoc, canvas.width, canvas.height)
-  log('info', program)
-  log('info', `dw buffer ${gl.drawingBufferWidth}, ${gl.drawingBufferHeight}`)
-
-  gl.clearColor(0.5,0.5,0.5,1.0)
-  gl.clear(gl.COLOR_BUFFER_BIT)
-  gl.drawArrays(gl.TRIANGLES, 0, 6)
-  return Promise.resolve(true)
-}
-
-const N_BATCHES = 20
-
-function logsumexp(a: Float32Array) {
-  let sum_exp = 0.0;
-  for (let i = 0; i < a.length; ++i) sum_exp += Math.exp(a[i])
-  return Math.log(sum_exp)
-}
-
-function logit_to_probability(a: Float32Array) {
-  const lse = logsumexp(a)
-  for (let i = 0; i < a.length; ++i) a[i] = Math.exp(a[i] - lse)
-}
-
-const  N_INFERENCES_PER_BATCH = 10000
 try {
-  await boxes()
-  const t0 = performance.now()
-  const o = await gpgpu(N_INFERENCES_PER_BATCH)
-  const t1 = performance.now()
-
-  let results = Array(N_BATCHES)
-  for (let i = 0; i < N_BATCHES; ++i) {
-    results[i] = o.computation()
-  }
-  o.cleanup()
-  const t2 = performance.now()
-  const if_ps = Math.round((N_BATCHES * N_INFERENCES_PER_BATCH) / ((t2-t1)/1e3))
-  console.log(`completed ${N_BATCHES} batches of ${N_INFERENCES_PER_BATCH} ${if_ps}/s}`)
-  console.log('build time', t1 - t0)
-  console.log('generate time', t2 - t1)
-  console.log('total time', t2 - t0)
-  const t3 = performance.now()
-  let selected_models = new Float32Array(N_BATCHES * MODEL_SIZE)
-  let sm_index = 0
-  for (let i = 0; i < N_BATCHES; ++i) {
-    // now we need to look through the logit-indexed results table
-    const weights = results[i].weight
-    logit_to_probability(weights)
-    // let prob_sum = 0.0;
-    // for (let i = 0; i < weights.length; ++i) prob_sum += weights[i]
-    // console.log(`batch ${i} prob sum ${prob_sum} (diff from 1 ${1-prob_sum})`)
-    const z = Math.random()
-    // go thru the array until we have accumulated at least z's worth
-    let target_index = 0
-    let accumulated_prob = 0.0
-    for (; target_index < weights.length; ++target_index) {
-      accumulated_prob += weights[target_index];
-      if (accumulated_prob >= z) break;
-    }
-    if (target_index >= weights.length) {
-      log('info', `oddly enough, the weights table ran out of probability for ${z} : ${accumulated_prob}`)
-      target_index = weights.length - 1
-    }
-    const target_model = results[i].model.slice(target_index, target_index+MODEL_SIZE)
-    //console.log(`z = ${z}, index = ${target_index}, model = ${target_model}, outliers = ${results[i].outliers[target_index]}`)
-    for (let j = 0; j < MODEL_SIZE; j++) selected_models[sm_index++] = target_model[j]
-  }
-  const t4 = performance.now()
-  console.log('normalize time', t4 - t3)
-  await render([[0.0,0.0],[0.0,0.5],[-0.5,-0.5]])
+  main()
 } catch (error) {
   log('error', error)
 }
