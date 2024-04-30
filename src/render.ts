@@ -1,23 +1,25 @@
-import { Model } from './model.ts'
-import { webgl } from './webgl.ts'
+import type { Model } from './model.ts'
+import { WGL2Helper } from './webgl.ts'
 
 export class Render {
-  private positionLoc: number
-  private pointsLoc: WebGLUniformLocation
-  private canvasSizeLoc: WebGLUniformLocation
-  private nModelsLoc: WebGLUniformLocation
-  private polysLoc: WebGLUniformLocation
-  private outliersLoc: WebGLUniformLocation
-  private paramsLoc: WebGLUniformLocation
-  private gl: WebGL2RenderingContext
-  private program: WebGLProgram
+  private readonly positionLoc: number
+  private readonly pointsLoc: WebGLUniformLocation
+  private readonly canvasSizeLoc: WebGLUniformLocation
+  private readonly nModelsLoc: WebGLUniformLocation
+  private readonly polysLoc: WebGLUniformLocation
+  private readonly outliersLoc: WebGLUniformLocation
+  private readonly paramsLoc: WebGLUniformLocation
+  private readonly gl: WebGL2RenderingContext
+  private readonly program: WebGLProgram
   canvas: HTMLCanvasElement
 
-  constructor() {
-    this.canvas = document.querySelector<HTMLCanvasElement>('#c')!
+  constructor () {
+    const c = document.querySelector<HTMLCanvasElement>('#c')
+    if (c == null) throw new Error('unable to find canvas element for render')
+    this.canvas = c
     this.canvas.width = 400
     this.canvas.height = 400
-    const wgl = new webgl(this.canvas)
+    const wgl = new WGL2Helper(this.canvas)
     const gl = wgl.gl
 
     const vs = `#version 300 es
@@ -26,8 +28,8 @@ export class Render {
       gl_Position = a_position;
     }`
 
-    const program = wgl.createProgram(vs, render_shader)
-    this.positionLoc = gl.getAttribLocation(program, 'a_position')!
+    const program = wgl.createProgram(vs, renderShader)
+    this.positionLoc = gl.getAttribLocation(program, 'a_position')
     this.pointsLoc = wgl.getUniformLocation(program, 'points')
     this.canvasSizeLoc = wgl.getUniformLocation(program, 'canvas_size')
     this.nModelsLoc = wgl.getUniformLocation(program, 'n_models')
@@ -39,7 +41,7 @@ export class Render {
     // together cover the space [-1,1] x [-1,1], the point being that
     // we want to run the fragment shader for every pixel in the "texture".)
     const buffer = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+    gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
       -1, -1,
       1, -1,
@@ -48,7 +50,7 @@ export class Render {
       1, -1,
       1, 1]), gl.STATIC_DRAW)
     // Create a VAO for the attribute state
-    const vao = gl.createVertexArray();
+    const vao = gl.createVertexArray()
     gl.bindVertexArray(vao)
     // Tell WebGL how to pull data from the above array into
     // the position attribute of the vertex shader
@@ -65,7 +67,7 @@ export class Render {
     this.program = program
   }
 
-  render(points: number[][], models: Model[]) {
+  render (points: number[][], models: Model[]): void {
     const gl = this.gl
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
     gl.useProgram(this.program)
@@ -75,13 +77,13 @@ export class Render {
     gl.uniform3fv(this.polysLoc, models.map(m => Array.from(m.model)).flat())
     gl.uniform1uiv(this.outliersLoc, models.map(m => m.outliers))
     gl.uniform3fv(this.paramsLoc, models.map(m => Array.from(m.params)).flat())
-    gl.clearColor(0.5,0.5,0.5,1.0)
+    gl.clearColor(0.5, 0.5, 0.5, 1.0)
     gl.clear(gl.COLOR_BUFFER_BIT)
     gl.drawArrays(gl.TRIANGLES, 0, 6)
   }
 }
 
-const render_shader = /*glsl*/ `#version 300 es
+const renderShader = /* glsl */ `#version 300 es
 precision highp float;
 #define N_POINTS 10
 #define MAX_N_MODELS 100

@@ -1,4 +1,4 @@
-export const pcg3d = /*glsl*/ `
+export const pcg3d = /* glsl */ `
 
 // The rules: if you use any part of the seed, it's your responsibility
 // to call this routine to mutate the seed for the next user.
@@ -16,9 +16,9 @@ uvec3 pcg3d(uvec3 v) {
 }
 `
 
-export const beta = /*glsl*/ `
+export const beta = /* glsl */ `
 
-const float lgamma_coef[] = float[6](
+const float lgamma_coefficient[] = float[6](
   76.18009172947146,
   -86.50532032941677,
   24.01409824083091,
@@ -32,14 +32,13 @@ float lgamma(float xx) {
   float y = xx, x = xx, tmp = xx + 5.5;
   tmp -= (x+0.5)*log(tmp);
   float ser =  1.000000000190015;
-  for (int j = 0; j < 6; ++j) ser += lgamma_coef[j]/++y;
+  for (int j = 0; j < 6; ++j) ser += lgamma_coefficient[j]/++y;
   return -tmp+log(2.5066282746310005*ser/x);
 }
 
 `
 
-
-export const random_uniform = /*glsl*/ `
+export const randomUniform = /* glsl */ `
 // recovered from de-compiled JAX
 float random_uniform(inout uvec3 seed, float low, float high) {
   float a = uintBitsToFloat(seed.x >> 9u | 1065353216u) - 1.0;
@@ -51,7 +50,7 @@ float random_uniform(inout uvec3 seed, float low, float high) {
 }
 `
 
-export const logpdf_uniform = /*glsl*/ `
+export const logpdfUniform = /* glsl */ `
 // recovered from de-compiled JAX
 float logpdf_uniform(float v, float low, float high) {
   bool d = v != v;
@@ -67,7 +66,7 @@ float logpdf_uniform(float v, float low, float high) {
 }
 `
 
-export const flip = /*glsl*/ `
+export const flip = /* glsl */ `
 bool flip(inout uvec3 seed, float prob) {
   if (prob >= 1.0) return true;
   float a = random_uniform(seed, 0.0, 1.0);
@@ -75,7 +74,7 @@ bool flip(inout uvec3 seed, float prob) {
 }
 `
 
-export const erfc = /*glsl*/ `
+export const erfc = /* glsl */ `
 // From Press NR 3ed.
 // A lower-order Chebyshev approximation produces a very concise routine, though with only about single precision accuracy:
 // Returns the complementary error function with fractional error everywhere less than 1.2e-7.
@@ -88,7 +87,7 @@ float erfc(float x) {
 }
 `
 
-export const inv_erfc = /*glsl*/ `
+export const invErfc = /* glsl */ `
 // The following two functions are from
 // http://www.mimirgames.com/articles/programming/approximations-of-the-inverse-error-function/
 float inv_erfc(float x) {
@@ -113,20 +112,20 @@ float inv_erfc(float x) {
 }
 `
 
-export const inv_erf = /*glsl*/ `
+export const invErf = /* glsl */ `
 float inv_erf(float x){
   return inv_erfc(1.0-x);
 }
 `
 
-export const random_normal = /*glsl*/ `
+export const randomNormal = /* glsl */ `
 float random_normal(inout uvec3 seed, float loc, float scale) {
   float u = sqrt(2.0) * inv_erf(random_uniform(seed, -1.0, 1.0));
   return loc + scale * u;
 }
 `
 
-export const logpdf_normal = /*glsl*/ `
+export const logpdfNormal = /* glsl */ `
 // De-compiled from JAX genjax.normal.logpdf
 float logpdf_normal(float v, float loc, float scale) {
   float d = v / scale;
@@ -140,17 +139,17 @@ float logpdf_normal(float v, float loc, float scale) {
 }
 `
 
-export const compute_shader = /*glsl*/ `#version 300 es
+export const computeShader = /* glsl */ `#version 300 es
   ${pcg3d}
   ${beta}
-  ${random_uniform}
-  ${logpdf_uniform}
+  ${randomUniform}
+  ${logpdfUniform}
   ${flip}
   ${erfc}
-  ${inv_erfc}
-  ${inv_erf}
-  ${random_normal}
-  ${logpdf_normal}
+  ${invErfc}
+  ${invErf}
+  ${randomNormal}
+  ${logpdfNormal}
 
   #define N_POINTS 10
   #define N_POLY 3

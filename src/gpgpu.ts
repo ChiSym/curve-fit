@@ -1,62 +1,61 @@
-import { MODEL_SIZE, Model, Normal } from "./model"
-import { compute_shader } from "./shaders"
-import { webgl } from "./webgl"
+import { MODEL_SIZE, type Model, type Normal } from './model'
+import { computeShader } from './shaders'
+import { WGL2Helper } from './webgl'
 
-export type ResultBatch = {
-  model: Float32Array,
-  outliers: Uint32Array,
-  weight: Float32Array,
+export interface ResultBatch {
+  model: Float32Array
+  outliers: Uint32Array
+  weight: Float32Array
   params: Float32Array
 }
 
-export type ModelParameters = {
-  points: number[][],
+export interface ModelParameters {
+  points: number[][]
   alpha: Normal[]
 }
 
-type InferenceResult = {
-  selected_models: Model[],
+interface InferenceResult {
+  selectedModels: Model[]
   ips: number
 }
 
-
 export class GPGPU_Inference {
-  private static UINTS_PER_SEED = 3
-  private static PARAMS_SIZE = 3
-  private static TF_BUFFER_NAMES = ['model', 'outliers', 'weight', 'params']
-  private wgl: webgl
-  private gl: WebGL2RenderingContext
-  private program: WebGLProgram
-  private pointsLoc: WebGLUniformLocation
-  private alphaLocLoc: WebGLUniformLocation
-  private alphaScaleLoc: WebGLUniformLocation
-  private vao: WebGLVertexArrayObject
-  private tfBuffers: Map<string, WebGLBuffer>
+  private static readonly UINTS_PER_SEED = 3
+  private static readonly PARAMS_SIZE = 3
+  private static readonly TF_BUFFER_NAMES = ['model', 'outliers', 'weight', 'params']
+  private readonly wgl: WGL2Helper
+  private readonly gl: WebGL2RenderingContext
+  private readonly program: WebGLProgram
+  private readonly pointsLoc: WebGLUniformLocation
+  private readonly alphaLocLoc: WebGLUniformLocation
+  private readonly alphaScaleLoc: WebGLUniformLocation
+  private readonly vao: WebGLVertexArrayObject
+  private readonly tfBuffers: Map<string, WebGLBuffer>
   // private modelBuffer: WebGLBuffer
   // private outliersBuffer: WebGLBuffer
   // private weightBuffer: WebGLBuffer
   // private paramsBuffer: WebGLBuffer
-  private seedLoc: number
-  private seedBuf: WebGLBuffer
-  private tf: WebGLTransformFeedback
-  private max_trials: number
+  private readonly seedLoc: number
+  private readonly seedBuf: WebGLBuffer
+  private readonly tf: WebGLTransformFeedback
+  private readonly max_trials: number
   private seeds: Uint32Array
-  private tfArrays: Map<string, Float32Array|Uint32Array>
+  private readonly tfArrays: Map<string, Float32Array | Uint32Array>
   // private modelArray: Float32Array
   // private outliersArray: Uint32Array
   // private weightArray: Float32Array
   // private paramsArray: Float32Array
 
-  constructor(max_trials: number) {
+  constructor (maxTrials: number) {
     const w = 2
     const h = 10
     const canvas = document.createElement('canvas')
     canvas.width = w
     canvas.height = h
-    const wgl = new webgl(canvas)
+    const wgl = new WGL2Helper(canvas)
     const gl = wgl.gl
 
-    const compute_fs = `#version 300 es
+    const computeFragmentShader = `#version 300 es
       precision highp float;
       void main() {
       }
@@ -64,7 +63,7 @@ export class GPGPU_Inference {
 
     this.vao = wgl.createVertexArray()
 
-    const program = wgl.createProgram(compute_shader, compute_fs, GPGPU_Inference.TF_BUFFER_NAMES)
+    const program = wgl.createProgram(computeShader, computeFragmentShader, GPGPU_Inference.TF_BUFFER_NAMES)
 
     this.seedLoc = gl.getAttribLocation(program, 'seed')
     // Create a VAO for the attribute state
@@ -72,11 +71,11 @@ export class GPGPU_Inference {
 
     const makeBufferAndSetAttribute = (data: AllowSharedBufferSource, loc: number): WebGLBuffer => {
       const buf = wgl.makeBuffer(data)
-      if (!buf) throw new Error('unable to create buffer')
+      if (buf == null) throw new Error('unable to create buffer')
       gl.enableVertexAttribArray(loc)
       gl.vertexAttribIPointer(
         loc,
-        GPGPU_Inference.UINTS_PER_SEED,  // size (num components)
+        GPGPU_Inference.UINTS_PER_SEED, // size (num components)
         gl.UNSIGNED_INT,
         0,
         0
@@ -84,8 +83,8 @@ export class GPGPU_Inference {
       return buf
     }
 
-    this.max_trials = max_trials
-    this.seeds = new Uint32Array(max_trials * GPGPU_Inference.UINTS_PER_SEED)
+    this.max_trials = maxTrials
+    this.seeds = new Uint32Array(maxTrials * GPGPU_Inference.UINTS_PER_SEED)
     this.seedBuf = makeBufferAndSetAttribute(this.seeds, this.seedLoc)
 
     // The vertex arrays (above) are for the INPUT.
@@ -95,12 +94,17 @@ export class GPGPU_Inference {
     gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, this.tf)
 
     this.tfBuffers = new Map()
-    this.tfBuffers.set('model', wgl.makeBuffer(max_trials * MODEL_SIZE * Float32Array.BYTES_PER_ELEMENT))
-    this.tfBuffers.set('outliers', wgl.makeBuffer(max_trials * Uint32Array.BYTES_PER_ELEMENT))
-    this.tfBuffers.set('weight', wgl.makeBuffer(max_trials * Float32Array.BYTES_PER_ELEMENT))
-    this.tfBuffers.set('params', wgl.makeBuffer(max_trials * GPGPU_Inference.PARAMS_SIZE * Float32Array.BYTES_PER_ELEMENT))
+    this.tfBuffers.set('model', wgl.makeBuffer(maxTrials * MODEL_SIZE * Float32Array.BYTES_PER_ELEMENT))
+    this.tfBuffers.set('outliers', wgl.makeBuffer(maxTrials * Uint32Array.BYTES_PER_ELEMENT))
+    this.tfBuffers.set('weight', wgl.makeBuffer(maxTrials * Float32Array.BYTES_PER_ELEMENT))
+    this.tfBuffers.set('params', wgl.makeBuffer(maxTrials * GPGPU_Inference.PARAMS_SIZE * Float32Array.BYTES_PER_ELEMENT))
 
-    for (let [i, b] of GPGPU_Inference.TF_BUFFER_NAMES.entries()) gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, this.tfBuffers.get(b)!)
+    for (const [i, b] of GPGPU_Inference.TF_BUFFER_NAMES.entries()) {
+      const buf = this.tfBuffers.get(b)
+      if (buf != null) {
+        gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, i, buf)
+      }
+    }
 
     gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null)
     gl.bindBuffer(gl.ARRAY_BUFFER, null)
@@ -125,11 +129,10 @@ export class GPGPU_Inference {
   // Runs the compute shader and retrieves the result of the computation.
   // NOTE that `compute` owns the storage holding the results, and that
   // storage will be overwritten on each call to compute.
-  private compute(parameters: ModelParameters): ResultBatch {
+  private compute (parameters: ModelParameters): ResultBatch {
     // DO THE COMPUTE PART
     const gl = this.gl
     gl.useProgram(this.program)
-
 
     // One GPU thread will be created for each _vertex_ in the array `seed`.
     // Each vertex is UINTS_PER_SEED unsigned 32 bit integers. The PRNG used
@@ -159,8 +162,14 @@ export class GPGPU_Inference {
     gl.disable(gl.RASTERIZER_DISCARD)
     // END COMPUTE PART
 
-    for (const b of GPGPU_Inference.TF_BUFFER_NAMES) {
-      this.wgl.upload(this.tfBuffers.get(b)!, this.tfArrays.get(b)!)
+    for (const name of GPGPU_Inference.TF_BUFFER_NAMES) {
+      const buf = this.tfBuffers.get(name)
+      const arr = this.tfArrays.get(name)
+      if (buf != null && arr != null) {
+        this.wgl.upload(buf, arr)
+      } else {
+        throw new Error(`cannot find buffer/array ${name}`)
+      }
     }
 
     // INSPECT RESULTS
@@ -172,22 +181,22 @@ export class GPGPU_Inference {
     }
   }
 
-  private logsumexp(a: Float32Array) {
-    let sum_exp = 0.0;
-    for (let i = 0; i < a.length; ++i) sum_exp += Math.exp(a[i])
-    return Math.log(sum_exp)
+  private logsumexp (a: Float32Array): number {
+    let sumExp = 0.0
+    for (let i = 0; i < a.length; ++i) sumExp += Math.exp(a[i])
+    return Math.log(sumExp)
   }
 
-  private logit_to_probability(a: Float32Array) {
+  private logit_to_probability (a: Float32Array): void {
     const lse = this.logsumexp(a)
     for (let i = 0; i < a.length; ++i) a[i] = Math.exp(a[i] - lse)
   }
 
-  inference(n_batches: number, parameters: ModelParameters): InferenceResult {
-    let inference_time = 0.0
-    let selected_models: Model[] = new Array(n_batches)
+  inference (nBatches: number, parameters: ModelParameters): InferenceResult {
+    let inferenceTime = 0.0
+    const selectedModels: Model[] = new Array(nBatches)
     const t0 = performance.now()
-    for (let i = 0; i < n_batches; ++i) {
+    for (let i = 0; i < nBatches; ++i) {
       const results: ResultBatch = this.compute(parameters)
 
       // now we need to look through the logit-indexed results table
@@ -195,39 +204,38 @@ export class GPGPU_Inference {
       this.logit_to_probability(weights)
       const z = Math.random()
       // go thru the array until we have accumulated at least z's worth
-      let target_index = 0
-      let accumulated_prob = 0.0
-      for (; target_index < weights.length; ++target_index) {
-        accumulated_prob += weights[target_index];
-        if (accumulated_prob >= z) break;
+      let targetIndex = 0
+      let accumulatedProb = 0.0
+      for (; targetIndex < weights.length; ++targetIndex) {
+        accumulatedProb += weights[targetIndex]
+        if (accumulatedProb >= z) break
       }
-      if (target_index >= weights.length) {
+      if (targetIndex >= weights.length) {
         // log('info', `oddly enough, the weights table ran out of probability for ${z} : ${accumulated_prob}`)
         // the above happens more often than I thought it would.
         // TODO: figure out why. theories:
         // 1) the model can generate a weight of NaN somehow
         // 2) all samples are so absurdly unlikely that the total probability
         //    content representable in double is 0.0, so that we cannot normalize
-        target_index = weights.length - 1
+        targetIndex = weights.length - 1
       }
-      selected_models[i] = {
-        model: results.model.slice(target_index * MODEL_SIZE, target_index * MODEL_SIZE + MODEL_SIZE),
-        outliers: results.outliers[target_index],
-        weight: results.weight[target_index],
-        params: results.params.slice(target_index * GPGPU_Inference.PARAMS_SIZE, target_index * GPGPU_Inference.PARAMS_SIZE + GPGPU_Inference.PARAMS_SIZE)
+      selectedModels[i] = {
+        model: results.model.slice(targetIndex * MODEL_SIZE, targetIndex * MODEL_SIZE + MODEL_SIZE),
+        outliers: results.outliers[targetIndex],
+        weight: results.weight[targetIndex],
+        params: results.params.slice(targetIndex * GPGPU_Inference.PARAMS_SIZE, targetIndex * GPGPU_Inference.PARAMS_SIZE + GPGPU_Inference.PARAMS_SIZE)
       }
     }
-    inference_time += performance.now() - t0
-    const ips = (n_batches * this.max_trials) / (inference_time/1e3)
+    inferenceTime += performance.now() - t0
+    const ips = (nBatches * this.max_trials) / (inferenceTime / 1e3)
     return {
-      selected_models: selected_models,
-      ips: ips
+      selectedModels,
+      ips
     }
   }
 
-
-  cleanup() {
+  cleanup (): void {
     this.gl.deleteBuffer(this.seedBuf)
-    this.tfBuffers.forEach(this.gl.deleteBuffer)
+    this.tfBuffers.forEach(b => { this.gl.deleteBuffer(b) })
   }
 }
