@@ -31,20 +31,12 @@ export class GPGPU_Inference {
   private readonly alphaScaleLoc: WebGLUniformLocation
   private readonly vao: WebGLVertexArrayObject
   private readonly tfBuffers: Map<string, WebGLBuffer>
-  // private modelBuffer: WebGLBuffer
-  // private outliersBuffer: WebGLBuffer
-  // private weightBuffer: WebGLBuffer
-  // private paramsBuffer: WebGLBuffer
   private readonly seedLoc: number
   private readonly seedBuf: WebGLBuffer
   private readonly tf: WebGLTransformFeedback
   private readonly max_trials: number
   private seeds: Uint32Array
   private readonly tfArrays: Map<string, Float32Array | Uint32Array>
-  // private modelArray: Float32Array
-  // private outliersArray: Uint32Array
-  // private weightArray: Float32Array
-  // private paramsArray: Float32Array
 
   constructor (maxTrials: number) {
     const w = 2

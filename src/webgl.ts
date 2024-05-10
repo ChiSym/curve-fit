@@ -2,7 +2,6 @@ export class WGL2Helper {
   gl: WebGL2RenderingContext
   canvas: HTMLCanvasElement
 
-  // TODO: wire this up
   constructor (canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('webgl2')
     if (ctx == null) throw new Error('Unable to create WebGL2 context')

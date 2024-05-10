@@ -11,8 +11,9 @@ const __dirname = path.dirname(__filename);
 const compat = new FlatCompat({baseDirectory: __dirname, recommendedConfig: pluginJs.configs.recommended});
 
 export default [
-  {languageOptions: { globals: globals.browser },
-   files:["src/**/*.ts"]
+  {
+    languageOptions: { globals: globals.browser },
+    files:["src/**/*.ts"]
   }, {
     ignores:["dist/*", "eslint.config.js"]
   },
