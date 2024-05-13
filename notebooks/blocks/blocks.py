@@ -64,6 +64,7 @@ class Polynomial(Block):
         @genjax.static_gen_fn
         def polynomial_gf() -> BlockFunction:
             return Polynomial.Function(coefficient_gf() @ "p")
+
         super().__init__(polynomial_gf)
 
 
@@ -168,7 +169,8 @@ class CurveFit:
         self,
         *,
         curve: Block,
-        inlier_sigma: Traceable,
+        sigma_inlier: Traceable,
+        p_outlier: Traceable,
     ):
 
         @genjax.static_gen_fn
@@ -181,20 +183,21 @@ class CurveFit:
 
         swc = genjax.switch_combinator(inlier_model, outlier_model)
 
-        @genjax.map_combinator(in_axes=(0, None, None))
+        @genjax.map_combinator(in_axes=(0, None, None, None))
         @genjax.static_gen_fn
         def kernel(
-            x: ArrayLike, f: Callable[[ArrayLike], FloatArray], inlier_sigma: ArrayLike
+            x: ArrayLike, f: Callable[[ArrayLike], FloatArray], sigma_in: ArrayLike, p_out: ArrayLike
         ) -> StaticGenerativeFunction:
-            is_outlier = genjax.flip(0.2) @ "outlier"
+            is_outlier = genjax.flip(p_out) @ "outlier"
             io = jnp.array(is_outlier, dtype=int)
-            return swc(io, f(x), inlier_sigma) @ "y"
+            return swc(io, f(x), sigma_in) @ "y"
 
         @genjax.static_gen_fn
         def model(xs: FloatArray) -> FloatArray:
             c = curve.gf() @ "curve"
-            inlier_s = inlier_sigma @ "inlier_sigma"
-            ys = kernel(xs, c, inlier_s) @ "ys"
+            sigma_in = sigma_inlier @ "sigma_inlier"
+            p_out = p_outlier @ "p_outlier"
+            ys = kernel(xs, c, sigma_in, p_out) @ "ys"
             return ys
 
         self.gf = model
@@ -219,5 +222,7 @@ class CurveFit:
             jax.random.split(k2, K), ws
         )
 
-        curves = trs.get_subtrace("curve").get_retval()
-        return jax.tree.map(lambda x: x[ixs], curves)
+        # curves = trs.get_subtrace("curve").get_retval()
+        # return jax.tree.map(lambda x: x[ixs], curves)
+        selected = jax.tree.map(lambda x: x[ixs], trs)
+        return selected
