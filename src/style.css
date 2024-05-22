@@ -31,7 +31,7 @@ body {
 }
 
 body #controls {
-  text-align: left
+  text-align: left;
 }
 
 h1 {
@@ -60,7 +60,7 @@ h1 {
 }
 
 .log-error {
-  color: #a00
+  color: #a00;
 }
 
 .card {

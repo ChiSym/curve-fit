@@ -1,5 +1,5 @@
-import type { Model } from './model.ts'
-import { WGL2Helper } from './webgl.ts'
+import type { Model } from "./model.ts"
+import { WGL2Helper } from "./webgl.ts"
 
 export class Render {
   private readonly positionLoc: number
@@ -13,9 +13,9 @@ export class Render {
   private readonly program: WebGLProgram
   canvas: HTMLCanvasElement
 
-  constructor () {
-    const c = document.querySelector<HTMLCanvasElement>('#c')
-    if (c == null) throw new Error('unable to find canvas element for render')
+  constructor() {
+    const c = document.querySelector<HTMLCanvasElement>("#c")
+    if (c == null) throw new Error("unable to find canvas element for render")
     this.canvas = c
     this.canvas.width = 400
     this.canvas.height = 400
@@ -29,26 +29,24 @@ export class Render {
     }`
 
     const program = wgl.createProgram(vs, renderShader)
-    this.positionLoc = gl.getAttribLocation(program, 'a_position')
-    this.pointsLoc = wgl.getUniformLocation(program, 'points')
-    this.canvasSizeLoc = wgl.getUniformLocation(program, 'canvas_size')
-    this.nModelsLoc = wgl.getUniformLocation(program, 'n_models')
-    this.polysLoc = wgl.getUniformLocation(program, 'polys')
-    this.outliersLoc = wgl.getUniformLocation(program, 'outliers')
-    this.paramsLoc = wgl.getUniformLocation(program, 'params')
+    this.positionLoc = gl.getAttribLocation(program, "a_position")
+    this.pointsLoc = wgl.getUniformLocation(program, "points")
+    this.canvasSizeLoc = wgl.getUniformLocation(program, "canvas_size")
+    this.nModelsLoc = wgl.getUniformLocation(program, "n_models")
+    this.polysLoc = wgl.getUniformLocation(program, "polys")
+    this.outliersLoc = wgl.getUniformLocation(program, "outliers")
+    this.paramsLoc = wgl.getUniformLocation(program, "params")
 
     // Set up full canvas clip space quad (this is two triangles that
     // together cover the space [-1,1] x [-1,1], the point being that
     // we want to run the fragment shader for every pixel in the "texture".)
     const buffer = gl.createBuffer()
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-      -1, -1,
-      1, -1,
-      -1, 1,
-      -1, 1,
-      1, -1,
-      1, 1]), gl.STATIC_DRAW)
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]),
+      gl.STATIC_DRAW,
+    )
     // Create a VAO for the attribute state
     const vao = gl.createVertexArray()
     gl.bindVertexArray(vao)
@@ -57,26 +55,32 @@ export class Render {
     gl.enableVertexAttribArray(this.positionLoc)
     gl.vertexAttribPointer(
       this.positionLoc,
-      2, /* count */
-      gl.FLOAT, /* type */
-      false, /* normalized */
-      0, /* stride */
-      0 /* offset */
+      2 /* count */,
+      gl.FLOAT /* type */,
+      false /* normalized */,
+      0 /* stride */,
+      0 /* offset */,
     )
     this.gl = gl
     this.program = program
   }
 
-  render (points: number[][], models: Model[]): void {
+  render(points: number[][], models: Model[]): void {
     const gl = this.gl
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
     gl.useProgram(this.program)
     gl.uniform2f(this.canvasSizeLoc, gl.canvas.width, gl.canvas.height)
     gl.uniform2fv(this.pointsLoc, points.flat(), 0, 2 * points.length)
     gl.uniform1ui(this.nModelsLoc, models.length)
-    gl.uniform3fv(this.polysLoc, models.map(m => Array.from(m.model)).flat())
-    gl.uniform1uiv(this.outliersLoc, models.map(m => m.outliers))
-    gl.uniform3fv(this.paramsLoc, models.map(m => Array.from(m.params)).flat())
+    gl.uniform3fv(this.polysLoc, models.map((m) => Array.from(m.model)).flat())
+    gl.uniform1uiv(
+      this.outliersLoc,
+      models.map((m) => m.outliers),
+    )
+    gl.uniform3fv(
+      this.paramsLoc,
+      models.map((m) => Array.from(m.params)).flat(),
+    )
     gl.clearColor(0.5, 0.5, 0.5, 1.0)
     gl.clear(gl.COLOR_BUFFER_BIT)
     gl.drawArrays(gl.TRIANGLES, 0, 6)
