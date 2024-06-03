@@ -57,8 +57,8 @@ repos:
       - id: eslint
         files: \.[jt]sx?$
         types: [file]
+        entry: ./scripts/run_eslint.sh
         additional_dependencies:
-          - eslint@9.3.0
           - globals@15.3.0
           - "@eslint/js@9.3.0"
           - typescript-eslint@8.0.0-alpha.20
@@ -71,6 +71,5 @@ repos:
 ci:
   # Notes:
   # - We're skipping pyright because we don't have a genjax release with ArrayLike
-  # - We're skipping eslint because of this issue: https://github.com/django/django/pull/18162
-  # TODO: we expect both of these conditions to be temporary
-  skip: [pyright, eslint]
+  # TODO: we expect this condition to be temporary
+  skip: [pyright]
