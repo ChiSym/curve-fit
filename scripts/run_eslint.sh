@@ -30,4 +30,6 @@ else
   echo "NODE_PATH variable is not set. Exiting."
 fi
 
+echo $NODE_PATH
+echo $PATH
 eslint
