@@ -8,7 +8,7 @@
 
 symlink_created=false
 
-function cleanup {
+function cleanup() {
   if [ "$symlink_created" = true ]; then
     rm -rf ./node_modules
     echo "Cleaned up temporary node_modules path."
