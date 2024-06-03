@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # pre-commit runner for eslint. This is required to deal with the fact that Node
 # builds a `module.paths` that looks for `node_modules` in the current directory
