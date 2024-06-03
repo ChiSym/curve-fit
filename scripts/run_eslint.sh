@@ -17,13 +17,17 @@ function cleanup {
 
 trap cleanup EXIT
 
-if [ ! -d ./node_modules ]; then
-  echo "Creating node_modules symlink"
+if [ -n "$NODE_PATH" ]; then
+  if [ ! -d ./node_modules ]; then
+    echo "Creating node_modules symlink"
 
-  ln -s $NODE_PATH .
-  symlink_created=true
+    ln -s $NODE_PATH .
+    symlink_created=true
+  else
+    echo "../node_modules already exists. Skipping symlink creation."
+  fi
 else
-  echo "../node_modules already exists. Skipping symlink creation."
+  echo "NODE_PATH variable is not set. Exiting."
 fi
 
 eslint
