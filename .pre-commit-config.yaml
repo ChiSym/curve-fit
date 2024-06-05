@@ -55,4 +55,4 @@ repos:
       - id: prettier
 
 ci:
-  skip: [eslint]
+  skip: [pyright, eslint]
