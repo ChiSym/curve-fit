@@ -8,10 +8,7 @@ import jax.random
 from genjax import Pytree
 from genjax.generative_functions.static import StaticGenerativeFunction
 from genjax.core import GenerativeFunctionClosure, GenerativeFunction
-from genjax.typing import Callable, FloatArray, PRNGKey
-from jax.typing import (
-    ArrayLike,
-)  # TODO: this appears in GenJAX 0.4.0; update this when that's released
+from genjax.typing import Callable, FloatArray, PRNGKey, ArrayLike
 
 
 class Block:
