@@ -9,11 +9,11 @@ from .blocks import (
 )
 
 __all__ = [
-    'Block',
-    'BlockFunction',
-    'CoinToss',
-    'CurveFit',
-    'Periodic',
-    'Polynomial',
-    'Exponential',
+    "Block",
+    "BlockFunction",
+    "CoinToss",
+    "CurveFit",
+    "Periodic",
+    "Polynomial",
+    "Exponential",
 ]
