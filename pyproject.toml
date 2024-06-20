@@ -5,10 +5,12 @@ description = "Curve Fit Demonstration for GenJAX"
 authors = ["Colin Smith <colin.smith@gmail.com>"]
 license = "MIT"
 readme = "README.md"
+package-mode = false 
 
 [tool.poetry.dependencies]
 python = "^3.12.3, <3.13"
 genjax = { version = "0.3.1.post258.dev0+b103dee7", source = "gcp" }
+genstudio = {version = "v2024.06.20.0954.34", source = "gcp"}
 jax = { version="^0.4.28", extras = ["cpu"] }
 matplotlib = "^3.9.0"
 
@@ -26,6 +28,9 @@ include = ["src", "notebooks"]
 name = "gcp"
 url = "https://us-west1-python.pkg.dev/probcomp-caliban/probcomp/simple/"
 priority = "explicit"
+
+[tool.jupytext]
+formats = "ipynb,py:percent"
 
 [build-system]
 requires = ["poetry-core"]
