@@ -368,7 +368,7 @@ def gaussian_drift(
                 key,
                 1.0 + n_outliers,
                 1 + len(n_outliers) + n_outliers,
-                shape = n_outliers.shape
+                shape=n_outliers.shape,
             )
 
         key, sub_key = jax.random.split(key)  # needed?
