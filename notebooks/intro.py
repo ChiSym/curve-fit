@@ -318,19 +318,9 @@ def gaussian_drift(
     def logit_to_prob(logit):
         return 1.0 / (1.0 + jnp.exp(-logit))
 
-    def coefficient_choicemap(values: FloatArray) -> genjax.ChoiceMap:
-        return jax.vmap(
-            lambda v: C[
-                "curve", "p", jnp.arange(len(v), dtype=int), "coefficients"
-            ].set(v)
-        )(values)
-
-    def p_outlier_choicemap(values: FloatArray) -> genjax.ChoiceMap:
-        return jax.vmap(lambda v: C["p_outlier"].set(v))(values)
-
     def gaussian_drift_step(key: PRNGKey, tr: genjax.Trace):
         choices = tr.get_choices()
-        shape = choices[coefficient_path].shape
+        shape = choices[coefficient_path].shape  # pyright: ignore [reportIndexIssue]
 
         def update(
             key: PRNGKey, original: genjax.ChoiceMap, cm: genjax.ChoiceMap
@@ -355,76 +345,58 @@ def gaussian_drift(
 
         def update_coefficients(key: PRNGKey):
             key, k1, k2 = jax.random.split(key, 3)
-            values = choices[coefficient_path]
-            original = coefficient_choicemap(values)
+            values = choices[coefficient_path]  # pyright: ignore [reportIndexIssue]
+            to_choicemap = jax.vmap(
+                lambda v: C[
+                    "curve", "p", jnp.arange(len(v), dtype=int), "coefficients"
+                ].set(v)
+            )
             drift = values + sd * jax.random.normal(k1, shape)
-            drifted = coefficient_choicemap(drift)
-            return update(k2, original, drifted)
+            return update(k2, to_choicemap(values), to_choicemap(drift))
 
         def update_p_outlier(key: PRNGKey):
-            p_outliers = choices[p_outlier_path]
-            n_outliers = jnp.sum(choices[outlier_path], axis=1)
+            # p_outlier is "global" to the model. Each point in the curve data
+            # has an outlier status assignment. We can therefore measure the
+            # posterior p_outlier and use that data to propose an update.
+            k1, k2 = jax.random.split(key)
+            p_outliers = choices[p_outlier_path]  # pyright: ignore [reportIndexIssue]
+            n_outliers = jnp.sum(choices[outlier_path], axis=1)  # pyright: ignore [reportIndexIssue]
             new_p_outliers = jax.random.beta(
-                key,
+                k1,
                 1.0 + n_outliers,
                 1 + len(n_outliers) + n_outliers,
                 shape=n_outliers.shape,
             )
+            to_choicemap = jax.vmap(lambda p: C["p_outlier"].set(p))
+            return update(k2, to_choicemap(p_outliers), to_choicemap(new_p_outliers))
 
-        key, sub_key = jax.random.split(key)  # needed?
-        return update_coefficients(sub_key)
+        def update_outlier_state(key: PRNGKey):
+            # we aren't doing this one for two reasons:
+            # a) there may be a genjax bug (we get a stack trace when we try) and
+            # b) the instructions ("update the outlier indicator for each variable
+            # using an MH proposal that proposes to flip each datapoint (from inliner
+            # to outlier, or vice versa) with probability 0.5, or otherwise keeps
+            # it the same") is the same thing as just changing all the outlier states
+            # to a new random 0.5 bernoulli coin flip.
+            def to_choicemap(v):
+                return jax.vmap(
+                    lambda o: C["ys", jnp.arange(len(o), dtype=int), "outlier"].set(o)
+                )(v)
 
-        # choices = tr.get_choices()
-        # p_outliers: FloatArray = choices["p_outlier"]
+            k1, k2 = jax.random.split(key)
+            outlier_states = choices[outlier_path]  # pyright: ignore [reportIndexIssue]
+            flips = jax.random.bernoulli(k1, shape=outlier_states.shape)
+            return update(
+                k2,
+                to_choicemap(outlier_states),
+                to_choicemap(jnp.logical_xor(outlier_states, flips).astype(int)),
+            )
 
-        # key, sub_key = jax.random.split(key)
-        # n_outliers = jnp.sum(choices[outlier_path], axis=1)
-        # new_p_outlier = jax.random.beta(
-        #     sub_key,
-        #     (1.0 + n_outliers),
-        #     1 + len(n_outliers) - n_outliers,
-        #     shape=n_outliers.shape,
-        # )
-        # p_outlier_change = update_p_outlier(new_p_outlier)
-
-        # key, sub_key = jax.random.split(key)
-        # new_sigma_inliner = choices["sigma_inlier"] + sd * jax.random.normal(sub_key)
-        # inlier_sigma_change = C["sigma_inlier"].set(new_sigma_inliner)
-
-        # key, sub_key = jax.random.split(key)
-        # mh_choices = jax.random.uniform(key=sub_key, shape=shape[:1])
-        # weight_ps = jnp.reciprocal(jnp.add(1.0, jnp.exp(jnp.negative(weights))))
-
-        # # Now, form a JAX-compatible expression which will create a where-map to complete the update with the "winners"
-        # decision = mh_choices < weight_ps
-        # selection = jnp.where(
-        #     jnp.broadcast_to(decision, transposed_shape).T,
-        #     drift,
-        #     choices[coefficient_path],
-        # )
-
-        # # In principle, it ought to be possible to "strain" a choice map for the winners
-        # # by doing something like a tree_map(lambda v: v[idxs]). But thie doesn't seem to
-        # # work.
-
-        # chm_winners = coefficient_choicemap(selection)
-        # chm_po_winners = update_p_outlier(
-        #     jnp.where(decision, new_p_outlier, p_outliers)
-        # )
-
-        # key, sub_key = jax.random.split(key)
-        # (final_tr, _, _, _) = jax.vmap(
-        #     lambda tr, key, chm: tr.update(key, chm), in_axes=(0, 0, 0)
-        # )(
-        #     tr,
-        #     jax.random.split(sub_key, shape[0]),
-        #     chm_winners + chm_po_winners + inlier_sigma_change,
-        # )
-        # return final_tr
-
-    # The initial trace and the first drifted may not have the exact same
-    # type. However, the drifted traces after the first are isomorphic.
-    # Therefore we seed the scan with the first drifted trace.
+        k1, k2, k3 = jax.random.split(key, 3)
+        tr = update_coefficients(k1)
+        tr = update_p_outlier(k2)
+        # tr = update_outlier_state(k3)
+        return tr
 
     sub_keys = jax.random.split(key, n)
     tr, _ = jax.lax.scan(
@@ -439,9 +411,4 @@ def gaussian_drift(
 key, sub_key = jax.random.split(jax.random.PRNGKey(314159))
 tru = gaussian_drift(key, tr, n=50)
 plot_posterior(tru, xs, ys)
-# %%
-
-plot_posterior(tru, xs, ys)
-# %%
-jnp.arange(200) < 10
 # %%
