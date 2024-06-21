@@ -21,7 +21,8 @@
 
 # %%
 import genjax
-import genjax.typing
+from genjax import ChoiceMapBuilder as C
+from genjax.typing import PRNGKey, FloatArray, ArrayLike
 import genstudio.plot as Plot
 import jax
 import jax.numpy as jnp
@@ -71,7 +72,8 @@ def plot_functions(fns: BlockFunction, **kwargs):
         [
             Plot.line({"x": xs, "y": ys, "stroke": i % 12}, kwargs)
             for i, ys in enumerate(yss.T)
-        ]
+        ],
+        {"clip": True, "height": 400, "width": 400, "y": {"domain": [-1, 1]}},
     )
 
 
@@ -164,9 +166,7 @@ curve_fit = CurveFit(curve=P, sigma_inlier=sigma_inlier, p_outlier=p_outlier)
 
 
 # %%
-def plot_posterior(
-    tr: genjax.Trace, xs: genjax.typing.FloatArray, ys: genjax.typing.FloatArray
-):
+def plot_posterior(tr: genjax.Trace, xs: FloatArray, ys: FloatArray):
     return (
         plot_functions(tr.get_subtrace(("curve",)).get_retval(), opacity=0.2)  # type: ignore
         + Plot.dot({"x": xs, "y": ys, "r": 4})
@@ -303,3 +303,145 @@ ascending_periodic_ex(P + Q + R)
 # The posterior distribution here is very thin, suggesting that the priors are too broad (note that I had to increase to 1M samples to get this far, which took 12.6s on my machine). Nonetheless, importance sampling on the sum function was able to find very plausible candidates.
 #
 # NB: actually that used to be true; now the posterior has a lot of interesting things in it (provoked in this instance I think by adding some noise to the y points)
+
+
+# %%
+def gaussian_drift(
+    key: PRNGKey, tr: genjax.Trace, scale: ArrayLike = 2.0 / 100.0, n: int = 1
+):
+    coefficient_path = ("curve", "p", ..., "coefficients")
+    p_outlier_path = ("p_outlier",)
+    outlier_path = ("ys", ..., "outlier")
+    display_width = 2.0
+    sd = display_width / 100.0
+
+    def logit_to_prob(logit):
+        return 1.0 / (1.0 + jnp.exp(-logit))
+
+    def coefficient_choicemap(values: FloatArray) -> genjax.ChoiceMap:
+        return jax.vmap(
+            lambda v: C[
+                "curve", "p", jnp.arange(len(v), dtype=int), "coefficients"
+            ].set(v)
+        )(values)
+
+    def p_outlier_choicemap(values: FloatArray) -> genjax.ChoiceMap:
+        return jax.vmap(lambda v: C["p_outlier"].set(v))(values)
+
+    def gaussian_drift_step(key: PRNGKey, tr: genjax.Trace):
+        choices = tr.get_choices()
+        shape = choices[coefficient_path].shape
+
+        def update(
+            key: PRNGKey, original: genjax.ChoiceMap, cm: genjax.ChoiceMap
+        ) -> genjax.Trace:
+            k1, k2, k3 = jax.random.split(key, 3)
+            (updated_tr, weights, arg_diff, bwd_problem) = jax.vmap(
+                lambda k, t, c: t.update(k, c)
+            )(jax.random.split(k1, shape[:1]), tr, cm)
+            mh_choices = jax.random.uniform(key=k2, shape=shape[:1])
+            ps = logit_to_prob(weights)
+            winners = jnp.expand_dims(mh_choices < ps, axis=1)
+            # winners.shape is (N, 1), which is broadcastable to the arrays in the vmapped trace
+            filtered_update = jax.tree.map(
+                lambda updated, original: jnp.where(winners, updated, original),
+                cm,
+                original,
+            )
+            (scored_tr, weights, arg_diff, bwd_problem) = jax.vmap(
+                lambda k, t, c: t.update(k, c)
+            )(jax.random.split(k3, shape[:1]), tr, filtered_update)
+            return scored_tr
+
+        def update_coefficients(key: PRNGKey):
+            key, k1, k2 = jax.random.split(key, 3)
+            values = choices[coefficient_path]
+            original = coefficient_choicemap(values)
+            drift = values + sd * jax.random.normal(k1, shape)
+            drifted = coefficient_choicemap(drift)
+            return update(k2, original, drifted)
+
+        def update_p_outlier(key: PRNGKey):
+            p_outliers = choices[p_outlier_path]
+            n_outliers = jnp.sum(choices[outlier_path], axis=1)
+            new_p_outliers = jax.random.beta(
+                key,
+                1.0 + n_outliers,
+                1 + len(n_outliers) + n_outliers,
+                shape = n_outliers.shape
+            )
+
+        key, sub_key = jax.random.split(key)  # needed?
+        return update_coefficients(sub_key)
+
+        # choices = tr.get_choices()
+        # p_outliers: FloatArray = choices["p_outlier"]
+
+        # key, sub_key = jax.random.split(key)
+        # n_outliers = jnp.sum(choices[outlier_path], axis=1)
+        # new_p_outlier = jax.random.beta(
+        #     sub_key,
+        #     (1.0 + n_outliers),
+        #     1 + len(n_outliers) - n_outliers,
+        #     shape=n_outliers.shape,
+        # )
+        # p_outlier_change = update_p_outlier(new_p_outlier)
+
+        # key, sub_key = jax.random.split(key)
+        # new_sigma_inliner = choices["sigma_inlier"] + sd * jax.random.normal(sub_key)
+        # inlier_sigma_change = C["sigma_inlier"].set(new_sigma_inliner)
+
+        # key, sub_key = jax.random.split(key)
+        # mh_choices = jax.random.uniform(key=sub_key, shape=shape[:1])
+        # weight_ps = jnp.reciprocal(jnp.add(1.0, jnp.exp(jnp.negative(weights))))
+
+        # # Now, form a JAX-compatible expression which will create a where-map to complete the update with the "winners"
+        # decision = mh_choices < weight_ps
+        # selection = jnp.where(
+        #     jnp.broadcast_to(decision, transposed_shape).T,
+        #     drift,
+        #     choices[coefficient_path],
+        # )
+
+        # # In principle, it ought to be possible to "strain" a choice map for the winners
+        # # by doing something like a tree_map(lambda v: v[idxs]). But thie doesn't seem to
+        # # work.
+
+        # chm_winners = coefficient_choicemap(selection)
+        # chm_po_winners = update_p_outlier(
+        #     jnp.where(decision, new_p_outlier, p_outliers)
+        # )
+
+        # key, sub_key = jax.random.split(key)
+        # (final_tr, _, _, _) = jax.vmap(
+        #     lambda tr, key, chm: tr.update(key, chm), in_axes=(0, 0, 0)
+        # )(
+        #     tr,
+        #     jax.random.split(sub_key, shape[0]),
+        #     chm_winners + chm_po_winners + inlier_sigma_change,
+        # )
+        # return final_tr
+
+    # The initial trace and the first drifted may not have the exact same
+    # type. However, the drifted traces after the first are isomorphic.
+    # Therefore we seed the scan with the first drifted trace.
+
+    sub_keys = jax.random.split(key, n)
+    tr, _ = jax.lax.scan(
+        lambda trace, key: (gaussian_drift_step(key, trace), key),
+        gaussian_drift_step(sub_keys[0], tr),
+        sub_keys[1:],
+    )
+    return tr
+
+
+# %%
+key, sub_key = jax.random.split(jax.random.PRNGKey(314159))
+tru = gaussian_drift(key, tr, n=50)
+plot_posterior(tru, xs, ys)
+# %%
+
+plot_posterior(tru, xs, ys)
+# %%
+jnp.arange(200) < 10
+# %%
