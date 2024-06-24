@@ -1,14 +1,15 @@
 import math
-from typing import override
+from typing import override, Generator
 
 import genjax
+
 from penzai import pz
 import jax.numpy as jnp
 import jax.random
 from genjax import Pytree
 from genjax.generative_functions.static import StaticGenerativeFunction
 from genjax.core import GenerativeFunctionClosure, GenerativeFunction
-from genjax.typing import Callable, FloatArray, PRNGKey, ArrayLike
+from genjax.typing import Callable, FloatArray, PRNGKey, ArrayLike, Tuple
 
 
 class Block:
@@ -33,6 +34,8 @@ class Block:
     def __matmul__(self, b: "Block"):
         return Compose(self, b)
 
+    def address_segments(self) -> Generator[Tuple, None, None]:
+        raise NotImplementedError()
 
 class BlockFunction(Pytree):
     """A BlockFunction is a Pytree which is also Callable."""
@@ -64,6 +67,10 @@ class Polynomial(Block):
 
         super().__init__(polynomial_gf)
 
+    @override
+    def address_segments(self):
+        yield ('p', ..., 'coefficients')
+
     @pz.pytree_dataclass
     class Function(BlockFunction):
         coefficients: FloatArray
@@ -91,6 +98,12 @@ class Periodic(Block):
 
         super().__init__(periodic_gf)
 
+    @override
+    def address_segments(self):
+        yield ('T',)
+        yield ('a',)
+        yield ('φ',)
+
     @pz.pytree_dataclass
     class Function(BlockFunction):
         amplitude: FloatArray
@@ -102,6 +115,7 @@ class Periodic(Block):
             return self.amplitude * jnp.sin(self.phase + 2 * x * math.pi / self.period)
 
 
+
 class Exponential(Block):
     def __init__(self, *, a: GenerativeFunctionClosure, b: GenerativeFunctionClosure):
         @genjax.gen
@@ -109,6 +123,11 @@ class Exponential(Block):
             return Exponential.Function(a @ "a", b @ "b")
 
         super().__init__(exponential_gf)
+
+    @override
+    def address_segments(self):
+        yield ('a',)
+        yield ('b',)
 
     @pz.pytree_dataclass
     class Function(BlockFunction):
@@ -135,14 +154,30 @@ class Pointwise(Block):
 
         super().__init__(pointwise_op)
 
+    @override
+    def address_segments(self):
+        for s in self.f.address_segments():
+            yield ('l',) + s
+        for s in self.g.address_segments():
+            yield ('r',) + s
 
 class Compose(Block):
     def __init__(self, f: Block, g: Block):
+        self.f = f
+        self.g = g
+
         @genjax.gen
         def composition() -> BlockFunction:
             return Compose.Function(f.gf() @ "l", g.gf() @ "r")
 
         super().__init__(composition)
+
+    @override
+    def address_segments(self):
+        for s in self.f.address_segments():
+            yield ('l',) + s
+        for s in self.g.address_segments():
+            yield ('r',) + s
 
     @pz.pytree_dataclass
     class Function(BlockFunction):
@@ -165,6 +200,10 @@ class CoinToss(Block):
             return choice
 
         super().__init__(coin_toss_gf)
+
+    @override
+    def address_segments(self):
+        yield ('coin',)
 
 
 class CurveFit:
@@ -209,7 +248,11 @@ class CurveFit:
             return c
 
         self.gf = model
+        self.curve = curve
         self.jitted_importance = jax.jit(self.gf.importance)
+
+    def address_segments(self) -> Generator[Tuple, None, None]:
+        yield from self.curve.address_segments()
 
     def importance_sample(
         self,
@@ -230,8 +273,5 @@ class CurveFit:
         ixs = jax.vmap(jax.jit(genjax.categorical.sampler), in_axes=(0, None))(
             jax.random.split(k2, K), ws
         )
-
-        # curves = trs.get_subtrace("curve").get_retval()
-        # return jax.tree.map(lambda x: x[ixs], curves)
         selected = jax.tree.map(lambda x: x[ixs], trs)
         return selected
