@@ -321,72 +321,55 @@ def gaussian_drift(
     def logit_to_prob(logit):
         return 1.0 / (1.0 + jnp.exp(-logit))
 
-    # just had a thought: am I doing this the wrong way? Would it make sense to
-    # write this in a way where we update ONE particle, and vmap that? Currently,
-    # we're producing our choicemaps pre-vmapped, but maybe that is a mistake.
-
-
-    @jax.jit
     def gaussian_drift_step(key: PRNGKey, tr: genjax.Trace):
         choices = tr.get_choices()
-        #shape = choices[coefficient_path].shape  # pyright: ignore [reportIndexIssue]
 
         def update(
-            key: PRNGKey, original: genjax.ChoiceMap, cm: genjax.ChoiceMap
+            key: PRNGKey, cm: genjax.ChoiceMap
         ) -> genjax.Trace:
-            k1, k2, k3 = jax.random.split(key, 3)
-            (updated_tr, weights, arg_diff, bwd_problem) = jax.vmap(
-                lambda k, t, c: t.update(k, c)
-            )(jax.random.split(k1, shape[:1]), tr, cm)
-            mh_choices = jax.random.uniform(key=k2, shape=shape[:1])
-            ps = logit_to_prob(weights)
-            winners = jnp.expand_dims(mh_choices < ps, axis=1)
-            # winners.shape is (N, 1), which is broadcastable to the arrays in the vmapped trace
-            filtered_update = jax.tree.map(
-                lambda updated, original: jnp.where(winners, updated, original),
-                cm,
-                original,
+            k1, k2 = jax.random.split(key)
+            updated_tr, weight, arg_diff, bwd_problem = tr.update(k1, cm)
+            mh_choice = jax.random.uniform(key=k2)
+            ps = logit_to_prob(weight)
+            return jax.lax.cond(
+                mh_choice <= ps,
+                lambda: updated_tr,
+                lambda: tr
             )
-            (scored_tr, weights, arg_diff, bwd_problem) = jax.vmap(
-                lambda k, t, c: t.update(k, c)
-            )(jax.random.split(k3, shape[:1]), tr, filtered_update)
-            return scored_tr
 
         def update_coefficients(key: PRNGKey):
             key, k1, k2 = jax.random.split(key, 3)
             values = choices[coefficient_path]  # pyright: ignore [reportIndexIssue]
-            to_choicemap = jax.vmap(
-                lambda v: C[
-                    "curve", "p", jnp.arange(len(v), dtype=int), "coefficients"
-                ].set(v)
-            )
-            drift = values + sd * jax.random.normal(k1, shape)
-            return update(k2, to_choicemap(values), to_choicemap(drift))
+            drift = values + sd * jax.random.normal(k1, values.shape)
+            cm = C['curve', 'p', jnp.arange(len(v), dtype=int), 'coefficients'].set(drift)
+            return update(k2, cm)
 
         def update_p_outlier(key: PRNGKey):
             # p_outlier is "global" to the model. Each point in the curve data
             # has an outlier status assignment. We can therefore measure the
             # posterior p_outlier and use that data to propose an update.
             k1, k2 = jax.random.split(key)
-            p_outliers = choices[p_outlier_path]  # pyright: ignore [reportIndexIssue]
-            n_outliers = jnp.sum(choices[outlier_path], axis=1)  # pyright: ignore [reportIndexIssue]
-            new_p_outliers = jax.random.beta(
+            p_outlier = choices[p_outlier_path]  # pyright: ignore [reportIndexIssue]
+            outlier_states = choices[outlier_path] # pyright: ignore [reportIndexIssue]
+            n_outliers = jnp.sum(outlier_states)
+            new_p_outlier = jax.random.beta(
                 k1,
                 1.0 + n_outliers,
-                1 + len(n_outliers) + n_outliers,
-                shape=n_outliers.shape,
+                1 + len(outlier_states) + n_outliers,
             )
-            to_choicemap = jax.vmap(lambda p: C["p_outlier"].set(p))
-            return update(k2, to_choicemap(p_outliers), to_choicemap(new_p_outliers))
+            return update(k2, C['p_outlier'].set(new_p_outlier))
 
         def update_outlier_state(key: PRNGKey):
             # we aren't doing this one for two reasons:
             # a) there may be a genjax bug (we get a stack trace when we try) and
             # b) the instructions ("update the outlier indicator for each variable
-            # using an MH proposal that proposes to flip each datapoint (from inliner
+            # using an MH proposal that proposes to flip each data point (from inliner
             # to outlier, or vice versa) with probability 0.5, or otherwise keeps
             # it the same") is the same thing as just changing all the outlier states
             # to a new random 0.5 bernoulli coin flip.
+
+            # Secondly, we're changing the _level at which we vmap_ so this code
+            # below may become obsolete
             def to_choicemap(v):
                 return jax.vmap(
                     lambda o: C["ys", jnp.arange(len(o), dtype=int), "outlier"].set(o)
@@ -397,7 +380,6 @@ def gaussian_drift(
             flips = jax.random.bernoulli(k1, shape=outlier_states.shape)
             return update(
                 k2,
-                to_choicemap(outlier_states),
                 to_choicemap(jnp.logical_xor(outlier_states, flips).astype(int)),
             )
 
@@ -407,34 +389,26 @@ def gaussian_drift(
         # tr = update_outlier_state(k3)
         return tr
 
-    # gaussian_drift_step has the effect of slightly alterning the type
-    # of objects within the trace, but once it has been applied, the
-    # typing is stable. Therefore, we seed the accelerated iteration with
-    # the result of the first update step, and use scan to iterate over
-    # the remaining n-1 steps
-    sub_keys = jax.random.split(key, n)
+    # The first step is an empty update to stabilize the type of the trace (GEN-306)
+    tr0 = jax.vmap(lambda t: t.update(jax.random.PRNGKey(0), C.d({})))(tr)[0]
+    # The blocks library arranges for importance samples to come from vmap (even if
+    # only one was requested), so we may expect a normally-scalar field like score
+    # to have a leading axis which equals the number of traces within.
+    K = tr.get_score().shape[0]  # pyright: ignore [reportAttributeAccessIssue]
+    # This is a two-dimensional JAX operation: we scan through `n` steps of `K` traces
+    sub_keys = jax.random.split(key, (n, K))
     tr, _ = jax.lax.scan(
-        lambda trace, key: (gaussian_drift_step(key, trace), None),
-        gaussian_drift_step(sub_keys[0], tr),
-        sub_keys[1:],
+        lambda trace, keys: (jax.vmap(gaussian_drift_step)(keys, trace), None),
+        tr0,
+        sub_keys,
     )
     return tr
-
 
 # %%
 key, sub_key = jax.random.split(jax.random.PRNGKey(314159))
 tru = gaussian_drift(key, curve_fit, tr, n=100)
 plot_posterior(tru, xs, ys)
 
-# %%
-key, sub_key = jax.random.split(jax.random.PRNGKey(314159))
-tru.get_gen_fn() == curve_fit.gf
-#plot_posterior(gaussian_drift(sub_key, tru, n=100, scale=.005), xs, ys)
-
-# %%
-tr
-# %%
-tr.get_choices()['ys',...,'outlier']
 # %%
 def ap_ex2(F: Block, key=jax.random.PRNGKey(0)):
     xs = jnp.linspace(-0.9, 0.9, 20)
@@ -462,4 +436,6 @@ chs['curve','r','T']
 # %%
 list((P+Q).address_segments())
 list(P.address_segments())# %%
+# %%
+tr0
 # %%

@@ -9,7 +9,7 @@ package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.12.3, <3.13"
-genjax = { version = "0.3.1.post258.dev0+b103dee7", source = "gcp" }
+genjax = { version = "0.4.0", source = "gcp" }
 genstudio = {version = "v2024.06.20.1130", source = "gcp"}
 # genstudio = {path = "../gen-studio", develop = true}
 jax = { version="^0.4.28", extras = ["cpu"] }

@@ -56,7 +56,7 @@ class BinaryOperation(BlockFunction):
 
 class Polynomial(Block):
     def __init__(self, *, max_degree: int, coefficient_d: GenerativeFunctionClosure):
-        @genjax.combinators.repeat_combinator(num_repeats=max_degree + 1)
+        @genjax.combinators.repeat(n=max_degree+1)
         @genjax.gen
         def coefficient_gf() -> FloatArray:
             return coefficient_d @ "coefficients"
@@ -78,11 +78,12 @@ class Polynomial(Block):
         @override
         def __call__(self, x: ArrayLike):
             deg = self.coefficients.shape[-1]
-            powers = jnp.pow(
-                jnp.broadcast_to(x, deg), jax.lax.iota(dtype=int, size=deg)
-            )
-            return jax.numpy.matmul(self.coefficients, powers)
-
+            # tricky: we don't want pow to act like a binary operation between two
+            # arrays of the same shape; instead, we want it to take each element
+            # of the LHS and raise it to each of the powers in the RHS. So we convert
+            # the LHS into an (N, 1) shape.
+            powers = jnp.pow(jnp.array(x)[jnp.newaxis].T, jnp.arange(deg))
+            return powers @ self.coefficients.T
 
 class Periodic(Block):
     def __init__(
@@ -191,12 +192,14 @@ class Compose(Block):
 
 class CoinToss(Block):
     def __init__(self, probability: float, heads: Block, tails: Block):
-        swc = genjax.switch_combinator(tails.gf, heads.gf)
+
+        fork = heads.gf.or_else(tails.gf)
 
         @genjax.gen
         def coin_toss_gf() -> StaticGenerativeFunction:
-            a = jnp.array(genjax.flip(probability) @ "coin", dtype=int)
-            choice = swc(a, (), ()) @ "toss"
+            a = genjax.flip(probability) @ "coin"
+            choice = fork(jnp.bool_(a), (), ()) @ "toss"
+            # choice = swc(a, (), ()) @ "toss"
             return choice
 
         super().__init__(coin_toss_gf)
@@ -225,9 +228,9 @@ class CurveFit:
         def outlier_model():
             return genjax.uniform(-1.0, 1.0) @ "value"
 
-        swc = genjax.switch_combinator(inlier_model, outlier_model)
+        fork = outlier_model.or_else(inlier_model)
 
-        @genjax.combinators.vmap_combinator(in_axes=(0, None, None, None))
+        @genjax.combinators.vmap(in_axes=(0, None, None, None))
         @genjax.gen
         def kernel(
             x: ArrayLike,
@@ -236,8 +239,7 @@ class CurveFit:
             p_out: ArrayLike,
         ) -> StaticGenerativeFunction:
             is_outlier = genjax.flip(p_out) @ "outlier"
-            io = jnp.array(is_outlier, dtype=int)
-            return swc(io, (f(x), sigma_in), ()) @ "y"
+            return fork(jnp.bool_(is_outlier), (), (f(x), sigma_in)) @ "y"
 
         @genjax.gen
         def model(xs: FloatArray) -> FloatArray:
