@@ -33,18 +33,11 @@
 import genjax
 from genjax import ChoiceMapBuilder as C
 from genjax.typing import PRNGKey, FloatArray, ArrayLike
+import genjax_blocks as b
 import genstudio.plot as Plot
 import jax
 import jax.numpy as jnp
-import jax.tree
-from blocks import (
-    Block,
-    BlockFunction,
-    CurveFit,
-    Exponential,
-    Periodic,
-    Polynomial,
-)
+from genjax_blocks import *  # noqa: F403
 
 genjax.pretty()
 
@@ -52,13 +45,13 @@ genjax.pretty()
 # The `blocks` library is concentrated on a simple $\mathbb{R}\rightarrow\mathbb{R}$ inference problem, localized to the unit square for convenience, as found in the introductory GenJAX notebooks. We provide a "basis" of polynomial, $ae^{bx}$, and $a\sin(\phi + 2\pi x/T)$ functions, each of whose parameters are drawn from a standard distribution that the user supplies. The intro curve fit task contemplates a polynomial of degree 2 with normally distributed coefficients, which we may write as
 
 # %%
-P = Polynomial(max_degree=2, coefficient_d=genjax.normal(0.0, 1.0))
+quadratic = b.Polynomial(max_degree=2, coefficient_d=genjax.normal(0.0, 1.0))
 
 # %% [markdown]
 # Note one felicity we have achieved already: we can specify the normal distribution in a simple fashion without having to tuple the arguments or provide randomness: that comes later. The type of `P` is `Block`, a name inspired by [blockly](https://developers.google.com/blockly). The only operation we can do on a Block is request an array of samples from it.
 
 # %%
-p = P.sample()
+p = quadratic.sample()
 p.get_choices()
 
 # %% [markdown]
@@ -74,7 +67,7 @@ p.get_retval()(0.0)
 
 
 # %%
-def plot_functions(fns: BlockFunction, **kwargs):
+def plot_functions(fns: b.BlockFunction, **kwargs):
     xs = jnp.linspace(-1, 1, 200)
     yss = jax.vmap(fns)(xs)
     return Plot.new(
@@ -86,35 +79,35 @@ def plot_functions(fns: BlockFunction, **kwargs):
     )
 
 
-def plot_priors(B: Block, n: int):
+def plot_priors(B: b.Block, n: int):
     return plot_functions(B.sample(n).get_retval())
 
 
-plot_priors(P, 100)
+plot_priors(quadratic, 100)
 
 # %% [markdown]
 # We can do the same for our Periodic and Exponential distributions:
 
 # %%
-Q = Periodic(
+periodic = b.Periodic(
     amplitude=genjax.beta(2.0, 5.0),
     phase=genjax.uniform(-1.0, 1.0),
     period=genjax.normal(1.0, 1.0),
 )
 
-R = Exponential(a=genjax.normal(0.0, 1.0), b=genjax.normal(0.0, 1.0))
+exponential = b.Exponential(a=genjax.normal(0.0, 1.0), b=genjax.normal(0.0, 1.0))
 
 # %%
-plot_priors(Q, 50)
+plot_priors(periodic, 50)
 
 # %%
-plot_priors(R, 50)
+plot_priors(exponential, 50)
 
 # %% [markdown]
 # `Block` objects support the pointwise operations $+, *$ as well as `@` (function composition). Vikash's favorite ascending-periodic function might be modeled by the sum of a polynomial and a periodic function which we can write simply as $P+Q$:
 
 # %%
-plot_priors(P + Q, 15)
+plot_priors(quadratic + periodic, 15)
 
 # %% [markdown]
 # It does seem like the goal function lies in the span of the prior distribution in this case. (I pause here to note that pointwise binary operations in `Block` are not commutative as you might expect, because the randomness supplied by `sample` is injected left to right).
@@ -122,7 +115,7 @@ plot_priors(P + Q, 15)
 # The binary operations produce traces representing the expression tree that created them:
 
 # %%
-(P + Q).sample().get_choices()
+(quadratic + periodic).sample().get_choices()
 
 # %% [markdown]
 # Having assembled these pieces, let's turn to the inference task. This begins with a set of $x, y$ values with an outlier installed.
@@ -155,7 +148,7 @@ Plot.dot({"x": xs, "y": ys})
 # %%
 p_outlier = genjax.beta(1.0, 1.0)
 sigma_inlier = genjax.uniform(0.0, 0.3)
-curve_fit = CurveFit(curve=P, sigma_inlier=sigma_inlier, p_outlier=p_outlier)
+curve_fit = b.CurveFit(curve=quadratic, sigma_inlier=sigma_inlier, p_outlier=p_outlier)
 
 # %% [markdown]
 # We'll need a function to render the sample from the posterior: since, behind the scenes, Jax has turned the BlockFunctions into BlockFunctions of vectors of parameters, that code will be in terms of `tree_map`.
@@ -186,7 +179,7 @@ plot_posterior(tr, xs, ys)
 
 
 # %%
-def periodic_ex(F: Block, key=jax.random.PRNGKey(3)):
+def periodic_ex(F: b.Block, key=jax.random.PRNGKey(3)):
     ys = (
         (
             0.2 * jnp.sin(4 * xs + 0.3)
@@ -195,19 +188,20 @@ def periodic_ex(F: Block, key=jax.random.PRNGKey(3)):
         .at[7]
         .set(-0.7)
     )
-    fs = CurveFit(
+    fs = b.CurveFit(
         curve=F, sigma_inlier=sigma_inlier, p_outlier=p_outlier
     ).importance_sample(xs, ys, 100000, 100)
     return plot_posterior(fs, xs, ys)
 
 
-periodic_ex(P)
+periodic_ex(quadratic)
 
 # %% [markdown]
 # Though the sample points are periodic, we supplied the degree 2 polynomial prior, and got reasonable results quickly. Before trying the Periodic prior, we might try degree 3 polynomials, and see what we get:
 
 # %%
-periodic_ex(Polynomial(max_degree=3, coefficient_d=genjax.normal(0.0, 1.0)))
+cubic = b.Polynomial(max_degree=3, coefficient_d=genjax.normal(0.0, 1.0))
+periodic_ex(cubic)
 
 # %% [markdown]
 # **LGTM!**
@@ -216,7 +210,7 @@ periodic_ex(Polynomial(max_degree=3, coefficient_d=genjax.normal(0.0, 1.0)))
 # (NB: your results may vary, but if you see some darker lines this is because the importance sampling is done *with replacement*)
 
 # %%
-periodic_ex(Q, key=jax.random.PRNGKey(222))
+periodic_ex(periodic, key=jax.random.PRNGKey(222))
 
 # %% [markdown]
 # Interesting! The posterior is full of good solutions but also contains a sprinkling of Nyquist-impostors!
@@ -225,17 +219,17 @@ periodic_ex(Q, key=jax.random.PRNGKey(222))
 
 
 # %%
-def periodic_ex2(F: Block):
+def periodic_ex2(F: b.Block):
     ys = (0.2 * jnp.sin(4 * xs + 0.3)).at[7].set(-0.7)
-    fs = CurveFit(
-        curve=Q,
+    fs = b.CurveFit(
+        curve=periodic,
         sigma_inlier=genjax.uniform(0.1, 0.2),
         p_outlier=genjax.uniform(0.05, 0.2),
     ).importance_sample(xs, ys, 100000, 100)
     return plot_posterior(fs, xs, ys)
 
 
-periodic_ex2(P)
+periodic_ex2(quadratic)
 
 # %% [markdown]
 # ## Conclusion
@@ -250,16 +244,16 @@ periodic_ex2(P)
 # Keeping track of the curve_fit, xs & ys, and other data for different
 # experiments we will conduct can be confusing, so we'll write a little
 # function that yokes the experiment material into a dict.
-def ascending_periodic_ex(F: Block):
+def ascending_periodic_ex(F: b.Block):
     xs = jnp.linspace(-0.9, 0.9, 20)
     ys = (0.7 * xs + 0.3 * jnp.sin(9 * xs + 0.3)).at[7].set(0.75)
     ys += jax.random.normal(key=jax.random.PRNGKey(22), shape=ys.shape) * 0.07
-    curve_fit = CurveFit(curve=F, sigma_inlier=sigma_inlier, p_outlier=p_outlier)
+    curve_fit = b.CurveFit(curve=F, sigma_inlier=sigma_inlier, p_outlier=p_outlier)
     fs = curve_fit.importance_sample(xs, ys, 1000000, 100)
     return {"xs": xs, "ys": ys, "curve_fit": curve_fit, "tr": fs}
 
 
-ascending_periodic_prior = P + Q
+ascending_periodic_prior = quadratic + periodic
 periodic_data = ascending_periodic_ex(ascending_periodic_prior)
 plot_posterior(periodic_data["tr"], periodic_data["xs"], periodic_data["ys"])
 
@@ -272,7 +266,7 @@ plot_posterior(periodic_data["tr"], periodic_data["xs"], periodic_data["ys"])
 # %%
 def gaussian_drift(
     key: PRNGKey,
-    curve_fit: CurveFit,
+    curve_fit: b.CurveFit,
     tr: genjax.Trace,
     scale: ArrayLike = 2.0 / 100.0,
     n: int = 1,
@@ -354,8 +348,8 @@ def gaussian_drift(
             )
 
         k1, k2, *ks = jax.random.split(key, 2 + len(curve_fit.coefficient_paths))
-        for i in range(len(curve_fit.coefficient_paths)):
-            tr = update_coefficients(ks[i], curve_fit.coefficient_paths[i])
+        for k, path in zip(ks, curve_fit.coefficient_paths):
+            tr = update_coefficients(k, path)
         tr = update_p_outlier(k1)
         tr = update_sigma_inlier(k2)
         # tr = update_outlier_state(k3)
