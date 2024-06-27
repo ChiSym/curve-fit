@@ -13,11 +13,11 @@ genjax = { version = "0.4.0", source = "gcp" }
 genstudio = {version = "v2024.06.20.1130", source = "gcp"}
 # genstudio = {path = "../gen-studio", develop = true}
 jax = { version="^0.4.28", extras = ["cpu"] }
-matplotlib = "^3.9.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2.1"
 nbmake = "^1.5.3"
+jupytext = "^1.16.2"
 
 [tool.pyright]
 venvPath = "."
