@@ -13,6 +13,11 @@ from genjax.typing import Callable, FloatArray, PRNGKey, ArrayLike, Tuple, List
 
 
 class Block:
+    """A Block represents a distribution of functions. Blocks can be composed
+    with pointwise operations, the result being distributions over expression
+    trees of a fixed shape. Blocks may be sampled to generate BlockFunctions
+    from the underlying distribution."""
+
     gf: StaticGenerativeFunction
     jitted_sample: Callable
 
@@ -43,16 +48,6 @@ class BlockFunction(Pytree):
 
     def __call__(self, x: ArrayLike) -> FloatArray:
         raise NotImplementedError
-
-
-@pz.pytree_dataclass
-class BinaryOperation(BlockFunction):
-    lhs: BlockFunction
-    rhs: BlockFunction
-    op: Callable[[ArrayLike, ArrayLike], FloatArray] = Pytree.static()
-
-    def __call__(self, x: ArrayLike) -> FloatArray:
-        return self.op(self.lhs(x), self.rhs(x))
 
 
 class Polynomial(Block):
@@ -136,6 +131,10 @@ class Exponential(Block):
 
 
 class Pointwise(Block):
+    """Combines two blocks into an expression tree using a supplied concrete
+    binary operation. Generates BlockFunctions from the distribution of
+    expression trees with this fixed shape."""
+
     # NB: These are not commutative, even if the underlying binary operation is,
     # due to the way randomness is threaded through the operands.
     def __init__(
@@ -146,7 +145,7 @@ class Pointwise(Block):
 
         @genjax.gen
         def pointwise_op() -> BlockFunction:
-            return BinaryOperation(f.gf() @ "l", g.gf() @ "r", op)
+            return Pointwise.BinaryOperation(f.gf() @ "l", g.gf() @ "r", op)
 
         super().__init__(pointwise_op)
 
@@ -156,8 +155,20 @@ class Pointwise(Block):
         for s in self.g.address_segments():
             yield ("r",) + s
 
+    @pz.pytree_dataclass
+    class BinaryOperation(BlockFunction):
+        lhs: BlockFunction
+        rhs: BlockFunction
+        op: Callable[[ArrayLike, ArrayLike], FloatArray] = Pytree.static()
+
+        def __call__(self, x: ArrayLike) -> FloatArray:
+            return self.op(self.lhs(x), self.rhs(x))
+
 
 class Compose(Block):
+    """Combines two blocks using function compostion. `Compose(f, g)` represents
+    `f(g(_))`."""
+
     def __init__(self, f: Block, g: Block):
         self.f = f
         self.g = g
@@ -183,24 +194,11 @@ class Compose(Block):
             return self.f(self.g(x))
 
 
-class CoinToss(Block):
-    def __init__(self, probability: float, heads: Block, tails: Block):
-        fork = heads.gf.or_else(tails.gf)
-
-        @genjax.gen
-        def coin_toss_gf() -> StaticGenerativeFunction:
-            a = genjax.flip(probability) @ "coin"
-            choice = fork(jnp.bool_(a), (), ()) @ "toss"
-            # choice = swc(a, (), ()) @ "toss"
-            return choice
-
-        super().__init__(coin_toss_gf)
-
-    def address_segments(self):
-        yield ("coin",)
-
-
 class CurveFit:
+    """A CurveFit takes a Block, distribution of sigma_inlier and p_outlier,
+    and produces an object capable of producing importance samples of the
+    function distribution induced by the Block using JAX acceleration."""
+
     gf: GenerativeFunction
     curve: Block
     jitted_importance: Callable
@@ -255,6 +253,8 @@ class CurveFit:
         K: int,
         key: PRNGKey = jax.random.PRNGKey(0),
     ):
+        """Generate $N$ importance samples of the curves fitted to $xs, ys$ and
+        sample $K$ of them from the weighted posterior distribution."""
         choose_ys = jax.vmap(
             lambda ix, v: genjax.ChoiceMapBuilder["ys", ix, "y", "value"].set(v),
         )(jnp.arange(len(ys)), ys)

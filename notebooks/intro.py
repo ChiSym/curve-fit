@@ -314,6 +314,7 @@ def gaussian_drift(
             # posterior p_outlier and use that data to propose an update.
             k1, k2 = jax.random.split(key)
             outlier_states = choices[outlier_path]  # pyright: ignore [reportIndexIssue]
+            print('o1', outlier_states.shape)
             n_outliers = jnp.sum(outlier_states)
             new_p_outlier = jax.random.beta(
                 k1,
@@ -323,27 +324,16 @@ def gaussian_drift(
             return update(k2, C["p_outlier"].set(new_p_outlier))
 
         def update_outlier_state(key: PRNGKey):
-            # we aren't doing this one for two reasons:
-            # a) there may be a genjax bug (we get a stack trace when we try) and
-            # b) the instructions ("update the outlier indicator for each variable
-            # using an MH proposal that proposes to flip each data point (from inliner
-            # to outlier, or vice versa) with probability 0.5, or otherwise keeps
-            # it the same") is the same thing as just changing all the outlier states
-            # to a new random 0.5 bernoulli coin flip.
-
-            # Secondly, we're changing the _level at which we vmap_ so this code
-            # below may become obsolete
-            def to_choicemap(v):
-                return jax.vmap(
-                    lambda o: C["ys", jnp.arange(len(o), dtype=int), "outlier"].set(o)
-                )(v)
-
+            # this doesn't work: see GEN-324
             k1, k2 = jax.random.split(key)
-            outlier_states = choices[outlier_path]  # pyright: ignore [reportIndexIssue]
+            outlier_states = choices[outlier_path]  # pyright: ignore [reportIndexIssue]]
+            print('o2', outlier_states.shape)
             flips = jax.random.bernoulli(k1, shape=outlier_states.shape)
             return update(
                 k2,
-                to_choicemap(jnp.logical_xor(outlier_states, flips).astype(int)),
+                C["ys", jnp.arange(len(flips)), 'outlier'].set(
+                    jnp.logical_xor(outlier_states, flips).astype(int)
+                )
             )
 
         k1, k2, *ks = jax.random.split(key, 2 + len(curve_fit.coefficient_paths))
@@ -351,7 +341,7 @@ def gaussian_drift(
             tr = update_coefficients(k, path)
         tr = update_p_outlier(k1)
         tr = update_sigma_inlier(k2)
-        # tr = update_outlier_state(k3)
+        # tr = update_outlier_state(k3)  # GEN-324
         return tr
 
     # The first step is an empty update to stabilize the type of the trace (GEN-306)
