@@ -1,5 +1,5 @@
 import math
-from typing import override, Generator
+from typing import Generator
 
 import genjax
 
@@ -68,7 +68,6 @@ class Polynomial(Block):
 
         super().__init__(polynomial_gf)
 
-    @override
     def address_segments(self):
         yield ("p", ..., "coefficients")
 
@@ -76,7 +75,6 @@ class Polynomial(Block):
     class Function(BlockFunction):
         coefficients: FloatArray
 
-        @override
         def __call__(self, x: ArrayLike):
             deg = self.coefficients.shape[-1]
             # tricky: we don't want pow to act like a binary operation between two
@@ -101,7 +99,6 @@ class Periodic(Block):
 
         super().__init__(periodic_gf)
 
-    @override
     def address_segments(self):
         yield ("T",)
         yield ("a",)
@@ -113,7 +110,6 @@ class Periodic(Block):
         phase: FloatArray
         period: FloatArray
 
-        @override
         def __call__(self, x: ArrayLike) -> FloatArray:
             return self.amplitude * jnp.sin(self.phase + 2 * x * math.pi / self.period)
 
@@ -126,7 +122,6 @@ class Exponential(Block):
 
         super().__init__(exponential_gf)
 
-    @override
     def address_segments(self):
         yield ("a",)
         yield ("b",)
@@ -136,7 +131,6 @@ class Exponential(Block):
         a: FloatArray
         b: FloatArray
 
-        @override
         def __call__(self, x: ArrayLike) -> FloatArray:
             return self.a * jnp.exp(self.b * x)
 
@@ -156,7 +150,6 @@ class Pointwise(Block):
 
         super().__init__(pointwise_op)
 
-    @override
     def address_segments(self):
         for s in self.f.address_segments():
             yield ("l",) + s
@@ -175,7 +168,6 @@ class Compose(Block):
 
         super().__init__(composition)
 
-    @override
     def address_segments(self):
         for s in self.f.address_segments():
             yield ("l",) + s
@@ -187,7 +179,6 @@ class Compose(Block):
         f: BlockFunction
         g: BlockFunction
 
-        @override
         def __call__(self, x: ArrayLike) -> FloatArray:
             return self.f(self.g(x))
 
@@ -205,7 +196,6 @@ class CoinToss(Block):
 
         super().__init__(coin_toss_gf)
 
-    @override
     def address_segments(self):
         yield ("coin",)
 
