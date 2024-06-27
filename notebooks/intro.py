@@ -37,7 +37,6 @@ import genjax_blocks as b
 import genstudio.plot as Plot
 import jax
 import jax.numpy as jnp
-from genjax_blocks import *  # noqa: F403
 
 genjax.pretty()
 
