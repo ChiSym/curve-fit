@@ -11,30 +11,32 @@
 #     language: python
 #     name: python3
 # ---
-
 # %%
-# pyright: reportUnusedExpression=false
+import sys
+if "google.colab" in sys.modules:
+    from google.colab import auth  # pyright: ignore [reportMissingImports]
+
+    auth.authenticate_user()
+    %pip install --quiet keyring keyrings.google-artifactregistry-auth   # type: ignore # noqa
+    %pip install --quiet genjax==0.4.0.post4.dev0+9d775c6f genstudio==v2024.06.20.1130 genjax-blocks==0.1.0 --extra-index-url https://us-west1-python.pkg.dev/probcomp-caliban/probcomp/simple/  # noqa # type: ignore
+    # This example will work on GPU, CPU or TPU. To change your runtime,
+    # select "Change runtime type" from the dropdown on the top right
+    # of the colab page.
+    #
+    # Make sure that the string in brackets below is either `cuda12` (for GPU), `cpu` or `tpu`:
+    %pip install --quiet jax[cpu]==0.4.28  # type: ignore
 # %% [markdown]
 # # DSL for curve fit inference
 #
 # As part of the `genjax.interpreted` performance investigation, I wanted to investigate a DSL for the curve-fitting task which could achieve JAX-accelerated performance without introducing JAX concepts such as the Switch and Map combinators, `in_axes`, and other things that might complicate the exposition of inference for the newcomer. While doing so, I also studied ways to "automatically" thread randomness through the computation without having to discuss the careful use of `jax.random.split` which we recommend to GenJAX users. Having done the experiment, I have mixed feelings about the results: on the one hand, it is possible to get JAX-level performance with curve-building combinators, but the price of so doing is that the GFI is hidden from view as well, and that may be too far a step. Nonetheless, if you're still interested in what can be achieved in this framework, read on!
-
 # %%
 import genjax
-import genjax.typing
+from genjax import ChoiceMapBuilder as C
+from genjax.typing import PRNGKey, FloatArray, ArrayLike
+import genjax_blocks as b
 import genstudio.plot as Plot
 import jax
 import jax.numpy as jnp
-import jax.tree
-from blocks import (
-    Block,
-    BlockFunction,
-    CoinToss,
-    CurveFit,
-    Exponential,
-    Periodic,
-    Polynomial,
-)
 
 genjax.pretty()
 
@@ -42,13 +44,13 @@ genjax.pretty()
 # The `blocks` library is concentrated on a simple $\mathbb{R}\rightarrow\mathbb{R}$ inference problem, localized to the unit square for convenience, as found in the introductory GenJAX notebooks. We provide a "basis" of polynomial, $ae^{bx}$, and $a\sin(\phi + 2\pi x/T)$ functions, each of whose parameters are drawn from a standard distribution that the user supplies. The intro curve fit task contemplates a polynomial of degree 2 with normally distributed coefficients, which we may write as
 
 # %%
-P = Polynomial(max_degree=2, coefficient_d=genjax.normal(0.0, 1.0))
+quadratic = b.Polynomial(max_degree=2, coefficient_d=genjax.normal(0.0, 1.0))
 
 # %% [markdown]
 # Note one felicity we have achieved already: we can specify the normal distribution in a simple fashion without having to tuple the arguments or provide randomness: that comes later. The type of `P` is `Block`, a name inspired by [blockly](https://developers.google.com/blockly). The only operation we can do on a Block is request an array of samples from it.
 
 # %%
-p = P.sample()
+p = quadratic.sample()
 p.get_choices()
 
 # %% [markdown]
@@ -64,46 +66,47 @@ p.get_retval()(0.0)
 
 
 # %%
-def plot_functions(fns: BlockFunction, **kwargs):
+def plot_functions(fns: b.BlockFunction, **kwargs):
     xs = jnp.linspace(-1, 1, 200)
     yss = jax.vmap(fns)(xs)
     return Plot.new(
         [
             Plot.line({"x": xs, "y": ys, "stroke": i % 12}, kwargs)
             for i, ys in enumerate(yss.T)
-        ]
+        ],
+        {"clip": True, "height": 400, "width": 400, "y": {"domain": [-1, 1]}},
     )
 
 
-def plot_priors(B: Block, n: int):
+def plot_priors(B: b.Block, n: int):
     return plot_functions(B.sample(n).get_retval())
 
 
-plot_priors(P, 100)
+plot_priors(quadratic, 100)
 
 # %% [markdown]
 # We can do the same for our Periodic and Exponential distributions:
 
 # %%
-Q = Periodic(
+periodic = b.Periodic(
     amplitude=genjax.beta(2.0, 5.0),
     phase=genjax.uniform(-1.0, 1.0),
     period=genjax.normal(1.0, 1.0),
 )
 
-R = Exponential(a=genjax.normal(0.0, 1.0), b=genjax.normal(0.0, 1.0))
+exponential = b.Exponential(a=genjax.normal(0.0, 1.0), b=genjax.normal(0.0, 1.0))
 
 # %%
-plot_priors(Q, 50)
+plot_priors(periodic, 50)
 
 # %%
-plot_priors(R, 50)
+plot_priors(exponential, 50)
 
 # %% [markdown]
 # `Block` objects support the pointwise operations $+, *$ as well as `@` (function composition). Vikash's favorite ascending-periodic function might be modeled by the sum of a polynomial and a periodic function which we can write simply as $P+Q$:
 
 # %%
-plot_priors(P + Q, 15)
+plot_priors(quadratic + periodic, 15)
 
 # %% [markdown]
 # It does seem like the goal function lies in the span of the prior distribution in this case. (I pause here to note that pointwise binary operations in `Block` are not commutative as you might expect, because the randomness supplied by `sample` is injected left to right).
@@ -111,20 +114,7 @@ plot_priors(P + Q, 15)
 # The binary operations produce traces representing the expression tree that created them:
 
 # %%
-(P + Q).sample().get_choices()
-
-# %% [markdown]
-# Even if we don't appear to be using the GFI, we still have traces. The final step in this demo is to conduct an importance sample at JAX speed given a set of points. It's at this point that we want to create a model that supports the concept of outlier. In the original examples, the model tossed a Bernoulli coin, and selected between polynomials with a loose and tight variance. Vikash has elsewhere proposed switching between a normal and uniform distribution in this case, which we will attempt here. This is the point at which we run into the "if problem" of JAX, which we finesse using a `CoinToss` block (a better name might be `BernoulliChoice`, but we're just sketching here.)
-
-# %%
-ct = CoinToss(
-    probability=0.2,
-    heads=Polynomial(max_degree=1, coefficient_d=genjax.normal(0.0, 0.05)),
-    tails=Polynomial(max_degree=1, coefficient_d=genjax.normal(1.0, 0.05)),
-)
-
-# %%
-plot_priors(ct, 50)
+(quadratic + periodic).sample().get_choices()
 
 # %% [markdown]
 # Having assembled these pieces, let's turn to the inference task. This begins with a set of $x, y$ values with an outlier installed.
@@ -157,16 +147,14 @@ Plot.dot({"x": xs, "y": ys})
 # %%
 p_outlier = genjax.beta(1.0, 1.0)
 sigma_inlier = genjax.uniform(0.0, 0.3)
-curve_fit = CurveFit(curve=P, sigma_inlier=sigma_inlier, p_outlier=p_outlier)
+curve_fit = b.CurveFit(curve=quadratic, sigma_inlier=sigma_inlier, p_outlier=p_outlier)
 
 # %% [markdown]
 # We'll need a function to render the sample from the posterior: since, behind the scenes, Jax has turned the BlockFunctions into BlockFunctions of vectors of parameters, that code will be in terms of `tree_map`.
 
 
 # %%
-def plot_posterior(
-    tr: genjax.Trace, xs: genjax.typing.FloatArray, ys: genjax.typing.FloatArray
-):
+def plot_posterior(tr: genjax.Trace, xs: FloatArray, ys: FloatArray):
     return (
         plot_functions(tr.get_subtrace(("curve",)).get_retval(), opacity=0.2)  # type: ignore
         + Plot.dot({"x": xs, "y": ys, "r": 4})
@@ -184,49 +172,13 @@ plot_posterior(tr, xs, ys)
 # This is an excellent result, thanks to GenJAX, and I think indicative of what can be done with a DSL to temporarily shift the focus away from the nature of JAX. In this version of the model, the inlier sigma and probability were inference parameters of the model. Let's examine the distributions found by this inference:
 
 
-# %%
-def param_histo(tr):
-    return Plot.autoGrid(
-        [
-            Plot.histogram(tr.get_choices()["sigma_inlier"]),
-            Plot.histogram(tr.get_choices()["p_outlier"]),
-        ]
-    )
-
-
-param_histo(tr)
-
-
-# %% [markdown]
-# While we're at it, we can generate summary statistics on the various parameters, to improve the fit.
-
-# %%
-tr.get_choices()["curve", "p", ..., "coefficients"]
-
-# %%
-coefficients = tr.get_choices()["curve", "p", ..., "coefficients"]
-means = jnp.mean(coefficients, axis=0)
-stdevs = jnp.sqrt(jnp.var(coefficients, axis=0))
-means, stdevs
-
-# %%
-tr
-
-# %% [markdown]
-# equipped with that information, we could make a better prior:
-
-# %%
-updated_distributions = list(map(genjax.normal, means, stdevs))
-# P2 = Polynomial(max_degree=2, coefficient_d=[genjax.normal(means[0], stdevs[0]), genjax.normal(means[0], stdevs[0]), genjax.normal(means[1], stdevs[1])])
-updated_distributions
-
 # %% [markdown]
 #
 # Maybe we can stretch to accommodate a periodic sample:
 
 
 # %%
-def periodic_ex(F: Block, key=jax.random.PRNGKey(3)):
+def periodic_ex(F: b.Block, key=jax.random.PRNGKey(3)):
     ys = (
         (
             0.2 * jnp.sin(4 * xs + 0.3)
@@ -235,19 +187,20 @@ def periodic_ex(F: Block, key=jax.random.PRNGKey(3)):
         .at[7]
         .set(-0.7)
     )
-    fs = CurveFit(
+    fs = b.CurveFit(
         curve=F, sigma_inlier=sigma_inlier, p_outlier=p_outlier
     ).importance_sample(xs, ys, 100000, 100)
     return plot_posterior(fs, xs, ys)
 
 
-periodic_ex(P)
+periodic_ex(quadratic)
 
 # %% [markdown]
 # Though the sample points are periodic, we supplied the degree 2 polynomial prior, and got reasonable results quickly. Before trying the Periodic prior, we might try degree 3 polynomials, and see what we get:
 
 # %%
-periodic_ex(Polynomial(max_degree=3, coefficient_d=genjax.normal(0.0, 1.0)))
+cubic = b.Polynomial(max_degree=3, coefficient_d=genjax.normal(0.0, 1.0))
+periodic_ex(cubic)
 
 # %% [markdown]
 # **LGTM!**
@@ -256,7 +209,7 @@ periodic_ex(Polynomial(max_degree=3, coefficient_d=genjax.normal(0.0, 1.0)))
 # (NB: your results may vary, but if you see some darker lines this is because the importance sampling is done *with replacement*)
 
 # %%
-periodic_ex(Q, key=jax.random.PRNGKey(222))
+periodic_ex(periodic, key=jax.random.PRNGKey(222))
 
 # %% [markdown]
 # Interesting! The posterior is full of good solutions but also contains a sprinkling of Nyquist-impostors!
@@ -265,17 +218,17 @@ periodic_ex(Q, key=jax.random.PRNGKey(222))
 
 
 # %%
-def periodic_ex2(F: Block):
+def periodic_ex2(F: b.Block):
     ys = (0.2 * jnp.sin(4 * xs + 0.3)).at[7].set(-0.7)
-    fs = CurveFit(
-        curve=Q,
+    fs = b.CurveFit(
+        curve=periodic,
         sigma_inlier=genjax.uniform(0.1, 0.2),
         p_outlier=genjax.uniform(0.05, 0.2),
     ).importance_sample(xs, ys, 100000, 100)
     return plot_posterior(fs, xs, ys)
 
 
-periodic_ex2(P)
+periodic_ex2(quadratic)
 
 # %% [markdown]
 # ## Conclusion
@@ -286,20 +239,148 @@ periodic_ex2(P)
 # ## Grand Finale: the ascending periodic example
 
 
-# %%
-def ascending_periodic_ex(F: Block):
+# %% [markdown]
+# Keeping track of the curve_fit, xs & ys, and other data for different
+# experiments we will conduct can be confusing, so we'll write a little
+# function that yokes the experiment material into a dict.
+def ascending_periodic_ex(F: b.Block):
     xs = jnp.linspace(-0.9, 0.9, 20)
     ys = (0.7 * xs + 0.3 * jnp.sin(9 * xs + 0.3)).at[7].set(0.75)
     ys += jax.random.normal(key=jax.random.PRNGKey(22), shape=ys.shape) * 0.07
-    fs = CurveFit(
-        curve=F, sigma_inlier=sigma_inlier, p_outlier=p_outlier
-    ).importance_sample(xs, ys, 1000000, 100)
-    return plot_posterior(fs, xs, ys)
+    curve_fit = b.CurveFit(curve=F, sigma_inlier=sigma_inlier, p_outlier=p_outlier)
+    fs = curve_fit.importance_sample(xs, ys, 1000000, 100)
+    return {"xs": xs, "ys": ys, "curve_fit": curve_fit, "tr": fs}
 
 
-ascending_periodic_ex(P + Q + R)
+ascending_periodic_prior = quadratic + periodic
+periodic_data = ascending_periodic_ex(ascending_periodic_prior)
+plot_posterior(periodic_data["tr"], periodic_data["xs"], periodic_data["ys"])
 
 # %% [markdown]
 # The posterior distribution here is very thin, suggesting that the priors are too broad (note that I had to increase to 1M samples to get this far, which took 12.6s on my machine). Nonetheless, importance sampling on the sum function was able to find very plausible candidates.
 #
 # NB: actually that used to be true; now the posterior has a lot of interesting things in it (provoked in this instance I think by adding some noise to the y points)
+
+
+# %%
+def gaussian_drift(
+    key: PRNGKey,
+    curve_fit: b.CurveFit,
+    tr: genjax.Trace,
+    scale: ArrayLike = 2.0 / 100.0,
+    n: int = 1,
+):
+    """Run `n` steps of the update algorithm. `scale` specifies the amount of gaussian drift in SD units."""
+    if curve_fit.gf != tr.get_gen_fn():
+        raise ValueError("The trace was not generated by the given curve")
+    outlier_path = ("ys", ..., "outlier")
+
+    def logit_to_prob(logit):
+        return 1.0 / (1.0 + jnp.exp(-logit))
+
+    def gaussian_drift_step(key: PRNGKey, tr: genjax.Trace):
+        choices = tr.get_choices()
+
+        def update(key: PRNGKey, cm: genjax.ChoiceMap) -> genjax.Trace:
+            k1, k2 = jax.random.split(key)
+            updated_tr, weight, arg_diff, bwd_problem = tr.update(k1, cm)
+            mh_choice = jax.random.uniform(key=k2)
+            ps = logit_to_prob(weight)
+            return jax.lax.cond(mh_choice <= ps, lambda: updated_tr, lambda: tr)
+
+        def update_coefficients(key: PRNGKey, coefficient_path: tuple):
+            k1, k2 = jax.random.split(key)
+            values = choices[coefficient_path]  # pyright: ignore [reportIndexIssue]
+            drift = values + scale * jax.random.normal(k1, values.shape)
+
+            # substitute ... in coefficient path with array of integer indices
+            def fix(e):
+                return jnp.arange(len(drift)) if e is Ellipsis else e
+
+            new_path = tuple(fix(e) for e in coefficient_path)
+            cm = C[new_path].set(drift)
+            return update(k2, cm)
+
+        def update_sigma_inlier(key: PRNGKey):
+            k1, k2 = jax.random.split(key)
+            s = choices["sigma_inlier"]  # pyright: ignore [reportIndexIssue]
+            return update(
+                key, C["sigma_inlier"].set(s + scale * jax.random.normal(key=k1))
+            )
+
+        def update_p_outlier(key: PRNGKey):
+            # p_outlier is "global" to the model. Each point in the curve data
+            # has an outlier status assignment. We can therefore measure the
+            # posterior p_outlier and use that data to propose an update.
+            k1, k2 = jax.random.split(key)
+            outlier_states = choices[outlier_path]  # pyright: ignore [reportIndexIssue]
+            print('o1', outlier_states.shape)
+            n_outliers = jnp.sum(outlier_states)
+            new_p_outlier = jax.random.beta(
+                k1,
+                1.0 + n_outliers,
+                1 + len(outlier_states) + n_outliers,
+            )
+            return update(k2, C["p_outlier"].set(new_p_outlier))
+
+        def update_outlier_state(key: PRNGKey):
+            # this doesn't work: see GEN-324
+            k1, k2 = jax.random.split(key)
+            outlier_states = choices[outlier_path]  # pyright: ignore [reportIndexIssue]]
+            print('o2', outlier_states.shape)
+            flips = jax.random.bernoulli(k1, shape=outlier_states.shape)
+            return update(
+                k2,
+                C["ys", jnp.arange(len(flips)), 'outlier'].set(
+                    jnp.logical_xor(outlier_states, flips).astype(int)
+                )
+            )
+
+        k1, k2, *ks = jax.random.split(key, 2 + len(curve_fit.coefficient_paths))
+        for k, path in zip(ks, curve_fit.coefficient_paths):
+            tr = update_coefficients(k, path)
+        tr = update_p_outlier(k1)
+        tr = update_sigma_inlier(k2)
+        # tr = update_outlier_state(k3)  # GEN-324
+        return tr
+
+    # The first step is an empty update to stabilize the type of the trace (GEN-306)
+    tr0 = jax.vmap(lambda t: t.update(jax.random.PRNGKey(0), C.d({})))(tr)[0]
+    # The blocks library arranges for importance samples to come from vmap (even if
+    # only one was requested), so we may expect a normally-scalar field like score
+    # to have a leading axis which equals the number of traces within.
+    K = tr.get_score().shape[0]  # pyright: ignore [reportAttributeAccessIssue]
+    # This is a two-dimensional JAX operation: we scan through `n` steps of `K` traces
+    sub_keys = jax.random.split(key, (n, K))
+    tr, _ = jax.lax.scan(
+        lambda trace, keys: (jax.vmap(gaussian_drift_step)(keys, trace), None),
+        tr0,
+        sub_keys,
+    )
+    return tr
+
+
+# %% [markdown]
+# In this cell, we will take the original curve fit size-200 importance sample of
+# the degree-2 polynomial prior and run it through 100 steps of gaussian drift.
+key, sub_key = jax.random.split(jax.random.PRNGKey(314159))
+tru = gaussian_drift(sub_key, curve_fit, tr, n=100)
+plot_posterior(tru, xs, ys)
+
+# %% [markdown]
+# Now let's try something more difficult. We will gaussian drift the
+# periodic example.
+key, sub_key = jax.random.split(key)
+periodic_t1 = gaussian_drift(
+    sub_key, periodic_data["curve_fit"], periodic_data["tr"], n=100
+)
+plot_posterior(periodic_t1, periodic_data["xs"], periodic_data["ys"])
+# %% [markdown]
+# Let's drift the _result_ of that experiment at a smaller scale and see if that helps
+key, sub_key = jax.random.split(key)
+periodic_t2 = gaussian_drift(
+    sub_key, periodic_data["curve_fit"], periodic_t1, n=100, scale=0.005
+)
+plot_posterior(periodic_t2, periodic_data["xs"], periodic_data["ys"])
+
+# %%

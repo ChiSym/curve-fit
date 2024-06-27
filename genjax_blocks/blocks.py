@@ -1,17 +1,23 @@
 import math
-from typing import override
+from typing import Generator
 
 import genjax
+
 from penzai import pz
 import jax.numpy as jnp
 import jax.random
 from genjax import Pytree
 from genjax.generative_functions.static import StaticGenerativeFunction
 from genjax.core import GenerativeFunctionClosure, GenerativeFunction
-from genjax.typing import Callable, FloatArray, PRNGKey, ArrayLike
+from genjax.typing import Callable, FloatArray, PRNGKey, ArrayLike, Tuple, List
 
 
 class Block:
+    """A Block represents a distribution of functions. Blocks can be composed
+    with pointwise operations, the result being distributions over expression
+    trees of a fixed shape. Blocks may be sampled to generate BlockFunctions
+    from the underlying distribution."""
+
     gf: StaticGenerativeFunction
     jitted_sample: Callable
 
@@ -33,6 +39,9 @@ class Block:
     def __matmul__(self, b: "Block"):
         return Compose(self, b)
 
+    def address_segments(self) -> Generator[Tuple, None, None]:
+        raise NotImplementedError()
+
 
 class BlockFunction(Pytree):
     """A BlockFunction is a Pytree which is also Callable."""
@@ -41,19 +50,9 @@ class BlockFunction(Pytree):
         raise NotImplementedError
 
 
-@pz.pytree_dataclass
-class BinaryOperation(BlockFunction):
-    lhs: BlockFunction
-    rhs: BlockFunction
-    op: Callable[[ArrayLike, ArrayLike], FloatArray] = Pytree.static()
-
-    def __call__(self, x: ArrayLike) -> FloatArray:
-        return self.op(self.lhs(x), self.rhs(x))
-
-
 class Polynomial(Block):
     def __init__(self, *, max_degree: int, coefficient_d: GenerativeFunctionClosure):
-        @genjax.combinators.repeat_combinator(num_repeats=max_degree + 1)
+        @genjax.combinators.repeat(n=max_degree + 1)
         @genjax.gen
         def coefficient_gf() -> FloatArray:
             return coefficient_d @ "coefficients"
@@ -64,17 +63,21 @@ class Polynomial(Block):
 
         super().__init__(polynomial_gf)
 
+    def address_segments(self):
+        yield ("p", ..., "coefficients")
+
     @pz.pytree_dataclass
     class Function(BlockFunction):
         coefficients: FloatArray
 
-        @override
         def __call__(self, x: ArrayLike):
             deg = self.coefficients.shape[-1]
-            powers = jnp.pow(
-                jnp.broadcast_to(x, deg), jax.lax.iota(dtype=int, size=deg)
-            )
-            return jax.numpy.matmul(self.coefficients, powers)
+            # tricky: we don't want pow to act like a binary operation between two
+            # arrays of the same shape; instead, we want it to take each element
+            # of the LHS and raise it to each of the powers in the RHS. So we convert
+            # the LHS into an (N, 1) shape.
+            powers = jnp.pow(jnp.array(x)[jnp.newaxis].T, jnp.arange(deg))
+            return powers @ self.coefficients.T
 
 
 class Periodic(Block):
@@ -91,13 +94,17 @@ class Periodic(Block):
 
         super().__init__(periodic_gf)
 
+    def address_segments(self):
+        yield ("T",)
+        yield ("a",)
+        yield ("φ",)
+
     @pz.pytree_dataclass
     class Function(BlockFunction):
         amplitude: FloatArray
         phase: FloatArray
         period: FloatArray
 
-        @override
         def __call__(self, x: ArrayLike) -> FloatArray:
             return self.amplitude * jnp.sin(self.phase + 2 * x * math.pi / self.period)
 
@@ -110,17 +117,24 @@ class Exponential(Block):
 
         super().__init__(exponential_gf)
 
+    def address_segments(self):
+        yield ("a",)
+        yield ("b",)
+
     @pz.pytree_dataclass
     class Function(BlockFunction):
         a: FloatArray
         b: FloatArray
 
-        @override
         def __call__(self, x: ArrayLike) -> FloatArray:
             return self.a * jnp.exp(self.b * x)
 
 
 class Pointwise(Block):
+    """Combines two blocks into an expression tree using a supplied concrete
+    binary operation. Generates BlockFunctions from the distribution of
+    expression trees with this fixed shape."""
+
     # NB: These are not commutative, even if the underlying binary operation is,
     # due to the way randomness is threaded through the operands.
     def __init__(
@@ -131,45 +145,64 @@ class Pointwise(Block):
 
         @genjax.gen
         def pointwise_op() -> BlockFunction:
-            return BinaryOperation(f.gf() @ "l", g.gf() @ "r", op)
+            return Pointwise.BinaryOperation(f.gf() @ "l", g.gf() @ "r", op)
 
         super().__init__(pointwise_op)
 
+    def address_segments(self):
+        for s in self.f.address_segments():
+            yield ("l",) + s
+        for s in self.g.address_segments():
+            yield ("r",) + s
+
+    @pz.pytree_dataclass
+    class BinaryOperation(BlockFunction):
+        lhs: BlockFunction
+        rhs: BlockFunction
+        op: Callable[[ArrayLike, ArrayLike], FloatArray] = Pytree.static()
+
+        def __call__(self, x: ArrayLike) -> FloatArray:
+            return self.op(self.lhs(x), self.rhs(x))
+
 
 class Compose(Block):
+    """Combines two blocks using function compostion. `Compose(f, g)` represents
+    `f(g(_))`."""
+
     def __init__(self, f: Block, g: Block):
+        self.f = f
+        self.g = g
+
         @genjax.gen
         def composition() -> BlockFunction:
             return Compose.Function(f.gf() @ "l", g.gf() @ "r")
 
         super().__init__(composition)
 
+    def address_segments(self):
+        for s in self.f.address_segments():
+            yield ("l",) + s
+        for s in self.g.address_segments():
+            yield ("r",) + s
+
     @pz.pytree_dataclass
     class Function(BlockFunction):
         f: BlockFunction
         g: BlockFunction
 
-        @override
         def __call__(self, x: ArrayLike) -> FloatArray:
             return self.f(self.g(x))
 
 
-class CoinToss(Block):
-    def __init__(self, probability: float, heads: Block, tails: Block):
-        swc = genjax.switch_combinator(tails.gf, heads.gf)
-
-        @genjax.gen
-        def coin_toss_gf() -> StaticGenerativeFunction:
-            a = jnp.array(genjax.flip(probability) @ "coin", dtype=int)
-            choice = swc(a, (), ()) @ "toss"
-            return choice
-
-        super().__init__(coin_toss_gf)
-
-
 class CurveFit:
+    """A CurveFit takes a Block, distribution of sigma_inlier and p_outlier,
+    and produces an object capable of producing importance samples of the
+    function distribution induced by the Block using JAX acceleration."""
+
     gf: GenerativeFunction
+    curve: Block
     jitted_importance: Callable
+    coefficient_paths: List[Tuple]
 
     def __init__(
         self,
@@ -186,9 +219,9 @@ class CurveFit:
         def outlier_model():
             return genjax.uniform(-1.0, 1.0) @ "value"
 
-        swc = genjax.switch_combinator(inlier_model, outlier_model)
+        fork = outlier_model.or_else(inlier_model)
 
-        @genjax.combinators.vmap_combinator(in_axes=(0, None, None, None))
+        @genjax.combinators.vmap(in_axes=(0, None, None, None))
         @genjax.gen
         def kernel(
             x: ArrayLike,
@@ -197,8 +230,7 @@ class CurveFit:
             p_out: ArrayLike,
         ) -> StaticGenerativeFunction:
             is_outlier = genjax.flip(p_out) @ "outlier"
-            io = jnp.array(is_outlier, dtype=int)
-            return swc(io, (f(x), sigma_in), ()) @ "y"
+            return fork(jnp.bool_(is_outlier), (), (f(x), sigma_in)) @ "y"
 
         @genjax.gen
         def model(xs: FloatArray) -> FloatArray:
@@ -209,7 +241,9 @@ class CurveFit:
             return c
 
         self.gf = model
+        self.curve = curve
         self.jitted_importance = jax.jit(self.gf.importance)
+        self.coefficient_paths = [("curve",) + p for p in self.curve.address_segments()]
 
     def importance_sample(
         self,
@@ -219,6 +253,8 @@ class CurveFit:
         K: int,
         key: PRNGKey = jax.random.PRNGKey(0),
     ):
+        """Generate $N$ importance samples of the curves fitted to $xs, ys$ and
+        sample $K$ of them from the weighted posterior distribution."""
         choose_ys = jax.vmap(
             lambda ix, v: genjax.ChoiceMapBuilder["ys", ix, "y", "value"].set(v),
         )(jnp.arange(len(ys)), ys)
@@ -230,8 +266,5 @@ class CurveFit:
         ixs = jax.vmap(jax.jit(genjax.categorical.sampler), in_axes=(0, None))(
             jax.random.split(k2, K), ws
         )
-
-        # curves = trs.get_subtrace("curve").get_retval()
-        # return jax.tree.map(lambda x: x[ixs], curves)
         selected = jax.tree.map(lambda x: x[ixs], trs)
         return selected
