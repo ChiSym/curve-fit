@@ -133,11 +133,6 @@ Plot.dot({"x": xs, "y": ys})
 
 # %% [markdown]
 # We use a object called `CurveFit` to get an importance sample. Internally, `CurveFit` is written in terms of the map and switch combinators. That constructor will need simple GenerativeFunctions for the inlier and outlier models. I considered sticking with my design decision before of requiring the user to supply these in terms of the primitive distributions like `genjax.normal`, but instead, since the GFs are so simple, we may was well just write them down:
-
-# %%
-
-
-# %% [markdown]
 # The alternative might have been to let the user say, for example,
 # ```Python
 # lambda y: genjax.normal(y, 0.1)
@@ -150,19 +145,21 @@ sigma_inlier = genjax.uniform(0.0, 0.3)
 curve_fit = b.CurveFit(curve=quadratic, sigma_inlier=sigma_inlier, p_outlier=p_outlier)
 
 # %% [markdown]
-# We'll need a function to render the sample from the posterior: since, behind the scenes, Jax has turned the BlockFunctions into BlockFunctions of vectors of parameters, that code will be in terms of `tree_map`.
-
-
+# We'll need a function to render the sample from the posterior. We can extract the
+# return value of the trace named curve to get the vector of functions; this has the
+# same shape as samples from the prior, so `plot_functions` works here too.
 # %%
 def plot_posterior(tr: genjax.Trace, xs: FloatArray, ys: FloatArray):
     return (
         plot_functions(tr.get_subtrace(("curve",)).get_retval(), opacity=0.2)  # type: ignore
         + Plot.dot({"x": xs, "y": ys, "r": 4})
     )
-
-
 # %% [markdown]
-# All that remains is to generate the sample. We select $K$ samples from a posterior categorical distribution taken over $N$ samples. On my home Mac, whose GPU is not accessible to GenJAX, I can get $N=100\mathrm{k}$ importance samples in a few seconds! Recall that on GenJAX interpreted, each of these took a substantial fraction of second. From there, we can plot, say, $K=100$ of these with alpha blending to visualize the posterior.
+# All that remains is to generate the sample. We select $K$ samples from a posterior
+# categorical distribution taken over $N$ samples. On my home Mac, whose GPU is not
+# accessible to GenJAX, I can get $N=100\mathrm{k}$ importance samples in a few seconds!
+# Recall that on GenJAX interpreted, each of these took a substantial fraction of second.
+# From there, we can plot, say, $K=100$ of these with alpha blending to visualize the posterior.
 
 # %%
 tr = curve_fit.importance_sample(xs, ys, 100000, 200)
@@ -170,12 +167,7 @@ plot_posterior(tr, xs, ys)
 
 # %% [markdown]
 # This is an excellent result, thanks to GenJAX, and I think indicative of what can be done with a DSL to temporarily shift the focus away from the nature of JAX. In this version of the model, the inlier sigma and probability were inference parameters of the model. Let's examine the distributions found by this inference:
-
-
-# %% [markdown]
-#
 # Maybe we can stretch to accommodate a periodic sample:
-
 
 # %%
 def periodic_ex(F: b.Block, key=jax.random.PRNGKey(3)):
@@ -232,8 +224,6 @@ periodic_ex2(quadratic)
 
 # %% [markdown]
 # ## Conclusion
-
-# %% [markdown]
 # I like this framework more than I thought I would when I started it. A wise man once said it is easier to write probabilistic programming languages than probabilistic programs and I found it so. The experience of doing this helped me to understand JAX better. In particular, the idea of creating a custom `Pytree` object seemed exotic to me before I started this, but: if you want to have a Generative Function that produces something other than an array, while retaining full JAX-compatibility, it's exactly what you should do. In this case, the DSL allows the construction and composition of Generative Functions that sample from distributions of real-valued functions on the real line, and that's what curve fitting is about.
 #
 # ## Grand Finale: the ascending periodic example
@@ -243,6 +233,7 @@ periodic_ex2(quadratic)
 # Keeping track of the curve_fit, xs & ys, and other data for different
 # experiments we will conduct can be confusing, so we'll write a little
 # function that yokes the experiment material into a dict.
+# %%
 def ascending_periodic_ex(F: b.Block):
     xs = jnp.linspace(-0.9, 0.9, 20)
     ys = (0.7 * xs + 0.3 * jnp.sin(9 * xs + 0.3)).at[7].set(0.75)
@@ -260,8 +251,6 @@ plot_posterior(periodic_data["tr"], periodic_data["xs"], periodic_data["ys"])
 # The posterior distribution here is very thin, suggesting that the priors are too broad (note that I had to increase to 1M samples to get this far, which took 12.6s on my machine). Nonetheless, importance sampling on the sum function was able to find very plausible candidates.
 #
 # NB: actually that used to be true; now the posterior has a lot of interesting things in it (provoked in this instance I think by adding some noise to the y points)
-
-
 # %%
 def gaussian_drift(
     key: PRNGKey,
@@ -358,18 +347,17 @@ def gaussian_drift(
         sub_keys,
     )
     return tr
-
-
 # %% [markdown]
 # In this cell, we will take the original curve fit size-200 importance sample of
 # the degree-2 polynomial prior and run it through 100 steps of gaussian drift.
+# %%
 key, sub_key = jax.random.split(jax.random.PRNGKey(314159))
 tru = gaussian_drift(sub_key, curve_fit, tr, n=100)
 plot_posterior(tru, xs, ys)
-
 # %% [markdown]
 # Now let's try something more difficult. We will gaussian drift the
 # periodic example.
+# %%
 key, sub_key = jax.random.split(key)
 periodic_t1 = gaussian_drift(
     sub_key, periodic_data["curve_fit"], periodic_data["tr"], n=100
@@ -377,6 +365,7 @@ periodic_t1 = gaussian_drift(
 plot_posterior(periodic_t1, periodic_data["xs"], periodic_data["ys"])
 # %% [markdown]
 # Let's drift the _result_ of that experiment at a smaller scale and see if that helps
+# %%
 key, sub_key = jax.random.split(key)
 periodic_t2 = gaussian_drift(
     sub_key, periodic_data["curve_fit"], periodic_t1, n=100, scale=0.005
