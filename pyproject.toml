@@ -1,6 +1,8 @@
 [tool.poetry]
 name = "genjax-blocks"
-version = "0.1.0"
+# Leave this at 0.0.0; this key can't be missing, but it's subbed out
+# dynamically by `poetry.dynamic-versioning`.
+version = "0.0.0"
 description = "Curve Fit Demonstration for GenJAX"
 authors = ["Colin Smith <colin.smith@gmail.com>"]
 license = "MIT"
@@ -14,6 +16,11 @@ genstudio = {version = "v2024.06.20.1130", source = "gcp"}
 # genstudio = {path = "../gen-studio", develop = true}
 jax = { version="^0.4.28", extras = ["cpu"] }
 
+[tool.poetry-dynamic-versioning]
+enable = true
+vcs = "git"
+style = "pep440"
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.2.1"
 nbmake = "^1.5.3"
@@ -25,6 +32,16 @@ venv = ".venv"
 pythonVersion = "3.12.3"
 include = ["src", "notebooks"]
 
+
+[tool.ruff.format]
+# Ruff format chokes on %pip statments in colab preamble.
+# We will forego Ruff formatting until the relevant libraries
+# are public and the preamble is no longer needed.
+exclude = ["notebooks/intro.py"]
+
+[tool.ruff.lint.per-file-ignores]
+"notebooks/intro.py" = ["E999"]
+
 [[tool.poetry.source]]
 name = "gcp"
 url = "https://us-west1-python.pkg.dev/probcomp-caliban/probcomp/simple/"
@@ -34,5 +51,5 @@ priority = "explicit"
 formats = "ipynb,py:percent"
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0,<2.0.0"]
 build-backend = "poetry.core.masonry.api"

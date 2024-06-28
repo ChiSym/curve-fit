@@ -1,3 +1,5 @@
+from importlib import metadata
+
 from .blocks import (
     Block,
     BlockFunction,
@@ -15,3 +17,5 @@ __all__ = [
     "Polynomial",
     "Exponential",
 ]
+
+__version__ = metadata.version("genjax-blocks")
