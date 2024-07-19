@@ -7,8 +7,7 @@ from penzai import pz
 import jax.numpy as jnp
 import jax.random
 from genjax import Pytree
-from genjax.generative_functions.static import StaticGenerativeFunction
-from genjax.core import GenerativeFunctionClosure, GenerativeFunction
+from genjax.core import GenerativeFunctionClosure
 from genjax.typing import Callable, FloatArray, PRNGKey, ArrayLike, Tuple, List
 
 
@@ -18,7 +17,7 @@ class Block:
     trees of a fixed shape. Blocks may be sampled to generate BlockFunctions
     from the underlying distribution."""
 
-    gf: StaticGenerativeFunction
+    gf: GenerativeFunctionClosure
     jitted_sample: Callable
 
     def __init__(self, gf):
@@ -31,10 +30,10 @@ class Block:
         )
 
     def __add__(self, b: "Block"):
-        return Pointwise(self, b, lambda a, b: jnp.add(a, b))
+        return Pointwise(self, b, jnp.add)
 
     def __mul__(self, b: "Block"):
-        return Pointwise(self, b, lambda a, b: jnp.multiply(a, b))
+        return Pointwise(self, b, jnp.multiply)
 
     def __matmul__(self, b: "Block"):
         return Compose(self, b)
@@ -61,7 +60,7 @@ class Polynomial(Block):
         def polynomial_gf() -> BlockFunction:
             return Polynomial.Function(coefficient_gf() @ "p")
 
-        super().__init__(polynomial_gf)
+        super().__init__(polynomial_gf())
 
     def address_segments(self):
         yield ("p", ..., "coefficients")
@@ -92,12 +91,12 @@ class Periodic(Block):
         def periodic_gf() -> BlockFunction:
             return Periodic.Function(amplitude @ "a", phase @ "φ", period @ "T")
 
-        super().__init__(periodic_gf)
+        super().__init__(periodic_gf())
 
     def address_segments(self):
-        yield ("T",)
         yield ("a",)
         yield ("φ",)
+        yield ("T",)
 
     @pz.pytree_dataclass
     class Function(BlockFunction):
@@ -115,7 +114,7 @@ class Exponential(Block):
         def exponential_gf() -> BlockFunction:
             return Exponential.Function(a @ "a", b @ "b")
 
-        super().__init__(exponential_gf)
+        super().__init__(exponential_gf())
 
     def address_segments(self):
         yield ("a",)
@@ -145,9 +144,9 @@ class Pointwise(Block):
 
         @genjax.gen
         def pointwise_op() -> BlockFunction:
-            return Pointwise.BinaryOperation(f.gf() @ "l", g.gf() @ "r", op)
+            return Pointwise.BinaryOperation(f.gf @ "l", g.gf @ "r", op)
 
-        super().__init__(pointwise_op)
+        super().__init__(pointwise_op())
 
     def address_segments(self):
         for s in self.f.address_segments():
@@ -175,9 +174,9 @@ class Compose(Block):
 
         @genjax.gen
         def composition() -> BlockFunction:
-            return Compose.Function(f.gf() @ "l", g.gf() @ "r")
+            return Compose.Function(f.gf @ "l", g.gf @ "r")
 
-        super().__init__(composition)
+        super().__init__(composition())
 
     def address_segments(self):
         for s in self.f.address_segments():
@@ -199,7 +198,7 @@ class CurveFit:
     and produces an object capable of producing importance samples of the
     function distribution induced by the Block using JAX acceleration."""
 
-    gf: GenerativeFunction
+    gf: GenerativeFunctionClosure
     curve: Block
     jitted_importance: Callable
     coefficient_paths: List[Tuple]
@@ -228,17 +227,16 @@ class CurveFit:
             f: Callable[[ArrayLike], FloatArray],
             sigma_in: ArrayLike,
             p_out: ArrayLike,
-        ) -> StaticGenerativeFunction:
+        ) -> FloatArray:
             is_outlier = genjax.flip(p_out) @ "outlier"
             return fork(jnp.bool_(is_outlier), (), (f(x), sigma_in)) @ "y"
 
         @genjax.gen
         def model(xs: FloatArray) -> FloatArray:
-            c = curve.gf() @ "curve"
+            c = curve.gf @ "curve"
             sigma_in = sigma_inlier @ "sigma_inlier"
             p_out = p_outlier @ "p_outlier"
-            _ = kernel(xs, c, sigma_in, p_out) @ "ys"
-            return c
+            return kernel(xs, c, sigma_in, p_out) @ "ys"
 
         self.gf = model
         self.curve = curve
