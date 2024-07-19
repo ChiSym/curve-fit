@@ -94,9 +94,9 @@ class Periodic(Block):
         super().__init__(periodic_gf())
 
     def address_segments(self):
-        yield ("T",)
         yield ("a",)
         yield ("φ",)
+        yield ("T",)
 
     @pz.pytree_dataclass
     class Function(BlockFunction):
