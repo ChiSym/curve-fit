@@ -31,10 +31,10 @@ class Block:
         )
 
     def __add__(self, b: "Block"):
-        return Pointwise(self, b, lambda a, b: jnp.add(a, b))
+        return Pointwise(self, b, jnp.add)
 
     def __mul__(self, b: "Block"):
-        return Pointwise(self, b, lambda a, b: jnp.multiply(a, b))
+        return Pointwise(self, b, jnp.multiply)
 
     def __matmul__(self, b: "Block"):
         return Compose(self, b)
