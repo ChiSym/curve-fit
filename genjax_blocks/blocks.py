@@ -198,7 +198,6 @@ class CurveFit:
     and produces an object capable of producing importance samples of the
     function distribution induced by the Block using JAX acceleration."""
 
-    gf: GenerativeFunctionClosure
     curve: Block
     jitted_importance: Callable
     coefficient_paths: List[Tuple]
@@ -238,9 +237,8 @@ class CurveFit:
             p_out = p_outlier @ "p_outlier"
             return kernel(xs, c, sigma_in, p_out) @ "ys"
 
-        self.gf = model
         self.curve = curve
-        self.jitted_importance = jax.jit(self.gf.importance)
+        self.jitted_importance = jax.jit(model.importance)
         self.coefficient_paths = [("curve",) + p for p in self.curve.address_segments()]
 
     def importance_sample(
