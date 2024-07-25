@@ -5,26 +5,28 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.2
+#       jupytext_version: 1.16.3
 #   kernelspec:
 #     display_name: genjax-RWVhKTPb-py3.12
 #     language: python
 #     name: python3
 # ---
+
 # %%
 import sys
+
 if "google.colab" in sys.modules:
     from google.colab import auth  # pyright: ignore [reportMissingImports]
 
     auth.authenticate_user()
-    %pip install --quiet keyring keyrings.google-artifactregistry-auth  # type: ignore # noqa
-    %pip install --quiet genjax==0.4.0.post4.dev0+9d775c6f genstudio==v2024.06.20.1130 genjax-blocks==0.1.0 --extra-index-url https://us-west1-python.pkg.dev/probcomp-caliban/probcomp/simple/  # type: ignore # noqa
+    # %pip install --quiet keyring keyrings.google-artifactregistry-auth  # type: ignore # noqa
+    # %pip install --quiet genjax==0.4.0.post4.dev0+9d775c6f genstudio==v2024.06.20.1130 genjax-blocks==0.1.0 --extra-index-url https://us-west1-python.pkg.dev/probcomp-caliban/probcomp/simple/  # type: ignore # noqa
     # This example will work on GPU, CPU or TPU. To change your runtime,
     # select "Change runtime type" from the dropdown on the top right
     # of the colab page.
     #
     # Make sure that the string in brackets below is either `cuda12` (for GPU), `cpu` or `tpu`:
-    %pip install --quiet jax[cpu]==0.4.28  # type: ignore # noqa
+    # %pip install --quiet jax[cpu]==0.4.28  # type: ignore # noqa
 # %% [markdown]
 # # DSL for curve fit inference
 #
@@ -37,8 +39,7 @@ import genjax_blocks as b
 import genstudio.plot as Plot
 import jax
 import jax.numpy as jnp
-
-genjax.pretty()
+import penzai.pz as pz
 
 # %% [markdown]
 # The `blocks` library is concentrated on a simple $\mathbb{R}\rightarrow\mathbb{R}$ inference problem, localized to the unit square for convenience, as found in the introductory GenJAX notebooks. We provide a "basis" of polynomial, $ae^{bx}$, and $a\sin(\phi + 2\pi x/T)$ functions, each of whose parameters are drawn from a standard distribution that the user supplies. The intro curve fit task contemplates a polynomial of degree 2 with normally distributed coefficients, which we may write as
@@ -66,21 +67,30 @@ p.get_retval()(0.0)
 
 
 # %%
-def plot_functions(fns: b.BlockFunction, **kwargs):
-    xs = jnp.linspace(-1, 1, 200)
+def plot_functions(fns: b.BlockFunction, winningIndex=None, **kwargs):
+    xs = jnp.linspace(-1, 1, 40)
     yss = jax.vmap(fns)(xs)
+
+    def winner(i):
+        return i == winningIndex
+
     return Plot.new(
         [
-            Plot.line({"x": xs, "y": ys, "stroke": i % 12}, kwargs)
+            Plot.line({"x": xs, "y": ys},
+                      curve="cardinal-open",
+                      stroke="black" if winner(i) else i%12,
+                      strokeWidth=4 if winner(i) else 1)
             for i, ys in enumerate(yss.T)
         ],
-        {"clip": True, "height": 400, "width": 400, "y": {"domain": [-1, 1]}},
+        Plot.domain([-1, 1]),
+        {"clip": True, "height": 400, "width": 400},
     )
 
+def plot_priors(B: b.Block, n: int, **kwargs):
+    return plot_functions(B.sample(n).get_retval(), **kwargs)
 
-def plot_priors(B: b.Block, n: int):
-    return plot_functions(B.sample(n).get_retval())
-
+# yss = f_i(x_j) (??)
+# want: 100 rows of 200 pairs of (x,y) ?
 
 plot_priors(quadratic, 100)
 
@@ -149,20 +159,25 @@ curve_fit = b.CurveFit(curve=quadratic, sigma_inlier=sigma_inlier, p_outlier=p_o
 # return value of the trace named curve to get the vector of functions; this has the
 # same shape as samples from the prior, so `plot_functions` works here too.
 # %%
-def plot_posterior(tr: genjax.Trace, xs: FloatArray, ys: FloatArray):
-    return (
-        plot_functions(tr.get_subtrace(("curve",)).get_retval(), opacity=0.2)  # type: ignore
-        + Plot.dot({"x": xs, "y": ys, "r": 4})
+def plot_posterior(tr: genjax.Trace, xs: FloatArray, ys: FloatArray, **kwargs):
+    ch = tr.get_choices()
+    outliers = ch['ys', ..., 'outlier']
+    outlier_fraction = jnp.sum(outliers, axis=0) / outliers.shape[0]
+    data = list(zip(xs, ys, outlier_fraction))
+    plot = (
+        plot_functions(tr.get_subtrace(("curve",)).get_retval(), opacity=0.2, **kwargs)  # type: ignore
+        + Plot.new(Plot.dot(data, fill=Plot.js('(d) => d3.interpolateViridis(d[2])'), r=4))
     )
+    return plot
 # %% [markdown]
-# All that remains is to generate the sample. We select $K$ samples from a posterior
+# All that remains is to generate the sample. We select $K$ samples each drawn from a posterior
 # categorical distribution taken over $N$ samples. On my home Mac, whose GPU is not
-# accessible to GenJAX, I can get $N=100\mathrm{k}$ importance samples in a few seconds!
+# accessible to GenJAX, I can get $KN=100\mathrm{k}$ importance samples in a few seconds!
 # Recall that on GenJAX interpreted, each of these took a substantial fraction of second.
 # From there, we can plot, say, $K=100$ of these with alpha blending to visualize the posterior.
 
 # %%
-tr = curve_fit.importance_sample(xs, ys, 100000, 200)
+tr = curve_fit.importance_sample(xs, ys, 4000, 25)
 plot_posterior(tr, xs, ys)
 
 # %% [markdown]
@@ -181,7 +196,7 @@ def periodic_ex(F: b.Block, key=jax.random.PRNGKey(3)):
     )
     fs = b.CurveFit(
         curve=F, sigma_inlier=sigma_inlier, p_outlier=p_outlier
-    ).importance_sample(xs, ys, 100000, 100)
+    ).importance_sample(xs, ys, 10000, 20)
     return plot_posterior(fs, xs, ys)
 
 
@@ -191,7 +206,9 @@ periodic_ex(quadratic)
 # Though the sample points are periodic, we supplied the degree 2 polynomial prior, and got reasonable results quickly. Before trying the Periodic prior, we might try degree 3 polynomials, and see what we get:
 
 # %%
-cubic = b.Polynomial(max_degree=3, coefficient_d=genjax.normal(0.0, 1.0))
+linear = b.Polynomial(max_degree=1, coefficient_d=genjax.normal(0.0, 2.0))
+cubic = b.Polynomial(max_degree=3, coefficient_d=genjax.normal(0.0, 2.0))
+
 periodic_ex(cubic)
 
 # %% [markdown]
@@ -205,22 +222,7 @@ periodic_ex(periodic, key=jax.random.PRNGKey(222))
 
 # %% [markdown]
 # Interesting! The posterior is full of good solutions but also contains a sprinkling of Nyquist-impostors!
-#
-# ...well, it used to. But changing the way the inlier_sigma is now inferred rather than prescribed has changed the quality of the posterior a great deal: Perhaps by allowing small sigmas, we have allowed a trace through which dominates all the others, weight-wise. We can get the old "curve-cloud" behavior back by fixing on 0.3 as the inlier sigma:
 
-
-# %%
-def periodic_ex2(F: b.Block):
-    ys = (0.2 * jnp.sin(4 * xs + 0.3)).at[7].set(-0.7)
-    fs = b.CurveFit(
-        curve=periodic,
-        sigma_inlier=genjax.uniform(0.1, 0.2),
-        p_outlier=genjax.uniform(0.05, 0.2),
-    ).importance_sample(xs, ys, 100000, 100)
-    return plot_posterior(fs, xs, ys)
-
-
-periodic_ex2(quadratic)
 
 # %% [markdown]
 # ## Conclusion
@@ -239,7 +241,7 @@ def ascending_periodic_ex(F: b.Block):
     ys = (0.7 * xs + 0.3 * jnp.sin(9 * xs + 0.3)).at[7].set(0.75)
     ys += jax.random.normal(key=jax.random.PRNGKey(22), shape=ys.shape) * 0.07
     curve_fit = b.CurveFit(curve=F, sigma_inlier=sigma_inlier, p_outlier=p_outlier)
-    fs = curve_fit.importance_sample(xs, ys, 1000000, 100)
+    fs = curve_fit.importance_sample(xs, ys, 20000, 10)
     return {"xs": xs, "ys": ys, "curve_fit": curve_fit, "tr": fs}
 
 
@@ -257,7 +259,7 @@ def gaussian_drift(
     curve_fit: b.CurveFit,
     tr: genjax.Trace,
     scale: ArrayLike = 2.0 / 100.0,
-    n: int = 1,
+    steps: int = 1,
 ):
     """Run `n` steps of the update algorithm. `scale` specifies the amount of gaussian drift in SD units."""
     if curve_fit.gf != tr.get_gen_fn():
@@ -303,7 +305,6 @@ def gaussian_drift(
             # posterior p_outlier and use that data to propose an update.
             k1, k2 = jax.random.split(key)
             outlier_states = choices[outlier_path]  # pyright: ignore [reportIndexIssue]
-            print('o1', outlier_states.shape)
             n_outliers = jnp.sum(outlier_states)
             new_p_outlier = jax.random.beta(
                 k1,
@@ -316,13 +317,12 @@ def gaussian_drift(
             # this doesn't work: see GEN-324
             k1, k2 = jax.random.split(key)
             outlier_states = choices[outlier_path]  # pyright: ignore [reportIndexIssue]]
-            print('o2', outlier_states.shape)
             flips = jax.random.bernoulli(k1, shape=outlier_states.shape)
             return update(
                 k2,
-                C["ys", jnp.arange(len(flips)), 'outlier'].set(
+                C["ys", jnp.arange(len(flips)), "outlier"].set(
                     jnp.logical_xor(outlier_states, flips).astype(int)
-                )
+                ),
             )
 
         k1, k2, *ks = jax.random.split(key, 2 + len(curve_fit.coefficient_paths))
@@ -340,36 +340,103 @@ def gaussian_drift(
     # to have a leading axis which equals the number of traces within.
     K = tr.get_score().shape[0]  # pyright: ignore [reportAttributeAccessIssue]
     # This is a two-dimensional JAX operation: we scan through `n` steps of `K` traces
-    sub_keys = jax.random.split(key, (n, K))
-    tr, _ = jax.lax.scan(
-        lambda trace, keys: (jax.vmap(gaussian_drift_step)(keys, trace), None),
+    sub_keys = jax.random.split(key, (steps, K))
+    def t(x):
+        return x, x
+    final_trace, gaussian_steps = jax.lax.scan(
+        lambda trace, keys: t(jax.vmap(gaussian_drift_step)(keys, trace)),
         tr0,
         sub_keys,
     )
-    return tr
+    return final_trace, gaussian_steps
 # %% [markdown]
-# In this cell, we will take the original curve fit size-200 importance sample of
-# the degree-2 polynomial prior and run it through 100 steps of gaussian drift.
+# In this cell, we will take the original curve fit size-100 importance sample of
+# the degree-2 polynomial prior and run it through 100 steps of Gaussian drift.
 # %%
 key, sub_key = jax.random.split(jax.random.PRNGKey(314159))
-tru = gaussian_drift(sub_key, curve_fit, tr, n=100)
+tru, steps = gaussian_drift(sub_key, curve_fit, tr, steps=100, scale=.1)
 plot_posterior(tru, xs, ys)
+# %% [markdown]
+# The Gaussian_drift function returns two values: the final result of the drift, which we plotted above, and the results of each individual Gaussian drift step. We can use the latter value to create an animation, showing Gaussian drift in action.
+
+# %%
+
+def drift_animation(step_trace: genjax.Trace, xs, ys, fps=8):
+    max_index = jnp.argmax(step_trace.get_score(), axis=1)
+    frames = [plot_posterior(genjax.pytree.nth(step_trace, i), xs, ys,
+                             winningIndex=max_index[i])
+              for i in range(step_trace.get_score().shape[0])]
+    return Plot.Frames(frames, fps=fps)
+
+
+
+# %%
+drift_animation(steps, xs, ys)
+
 # %% [markdown]
 # Now let's try something more difficult. We will gaussian drift the
 # periodic example.
 # %%
+
+# %%
+jnp.argmax(steps.get_score(), axis=0)
+
+# %%
 key, sub_key = jax.random.split(key)
-periodic_t1 = gaussian_drift(
-    sub_key, periodic_data["curve_fit"], periodic_data["tr"], n=100
+periodic_t1, periodic_t1_steps  = gaussian_drift(
+    sub_key, periodic_data["curve_fit"], periodic_data["tr"], steps=100
 )
-plot_posterior(periodic_t1, periodic_data["xs"], periodic_data["ys"])
+drift_animation(periodic_t1_steps, periodic_data["xs"], periodic_data["ys"])
 # %% [markdown]
 # Let's drift the _result_ of that experiment at a smaller scale and see if that helps
 # %%
 key, sub_key = jax.random.split(key)
-periodic_t2 = gaussian_drift(
-    sub_key, periodic_data["curve_fit"], periodic_t1, n=100, scale=0.005
+periodic_t2, periodic_t2_steps = gaussian_drift(
+    sub_key, periodic_data["curve_fit"], periodic_t1, steps=100, scale=0.005
 )
-plot_posterior(periodic_t2, periodic_data["xs"], periodic_data["ys"])
+drift_animation(periodic_t2_steps, periodic_data["xs"], periodic_data["ys"])
 
+# %%
+pz.ts.render_array(periodic_t2_steps.get_score())
+# %%
+key, sub_key = jax.random.split(key)
+
+def demo(
+    *,
+    xs: FloatArray,                                  # x coordinates of points to fit
+    ys: FloatArray,                                  # y coordinates of points to fit
+    noise_scale: float,                              # SD of noise added to ys
+    gaussian_drift_scale: float,                     # scale of Gaussian drift proposals
+    gaussian_drift_steps: int,                       # number of drift steps to take
+    sigma_inlier: genjax.GenerativeFunctionClosure,  # distribution of inlier sigma
+    p_outlier: genjax.GenerativeFunctionClosure,     # distribution of p_outlier
+    prior: b.Block,                                  # function shape
+    K: int,                                          # number of particles
+    N: int,                                          # size of importance sample per particle
+    fps: int,                                        # fps hint for generated animation
+    key: PRNGKey):                                   # seed
+    k1, k2, k3 = jax.random.split(key, 3)
+    ys += jax.random.normal(k1, shape=ys.shape) * noise_scale
+    curve_fit = b.CurveFit(curve=prior, sigma_inlier=sigma_inlier, p_outlier=p_outlier)
+    tr = curve_fit.importance_sample(xs, ys, N, K, key=k2)
+    _best, steps = gaussian_drift(k3, curve_fit, tr, gaussian_drift_scale, gaussian_drift_steps)
+    return drift_animation(steps, xs, ys, fps=fps)
+
+
+xs=jnp.linspace(-0.9, 0.9, 20)
+
+demo(
+    key=sub_key,
+    xs=xs,
+    ys=xs ** 2.0 - 0.5,
+    noise_scale=0.1,
+    gaussian_drift_scale=0.05,
+    gaussian_drift_steps=24,
+    sigma_inlier=genjax.uniform(0.0, 0.3),
+    p_outlier=genjax.beta(1.0, 1.0),
+    prior=quadratic,
+    K=10,
+    N=2000,
+    fps=2,
+)
 # %%

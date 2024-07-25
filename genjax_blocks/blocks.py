@@ -7,7 +7,7 @@ from penzai import pz
 import jax.numpy as jnp
 import jax.random
 from genjax import Pytree
-from genjax.core import GenerativeFunctionClosure
+from genjax.core import GenerativeFunctionClosure, GenerativeFunction
 from genjax.typing import Callable, FloatArray, PRNGKey, ArrayLike, Tuple, List
 
 
@@ -198,10 +198,11 @@ class CurveFit:
     and produces an object capable of producing importance samples of the
     function distribution induced by the Block using JAX acceleration."""
 
-    gf: GenerativeFunctionClosure
+    gf: GenerativeFunction
     curve: Block
     jitted_importance: Callable
     coefficient_paths: List[Tuple]
+    categorical_sampler: Callable
 
     def __init__(
         self,
@@ -242,6 +243,7 @@ class CurveFit:
         self.curve = curve
         self.jitted_importance = jax.jit(self.gf.importance)
         self.coefficient_paths = [("curve",) + p for p in self.curve.address_segments()]
+        self.categorical_sampler = jax.jit(genjax.categorical.sampler)
 
     def importance_sample(
         self,
@@ -251,18 +253,23 @@ class CurveFit:
         K: int,
         key: PRNGKey = jax.random.PRNGKey(0),
     ):
-        """Generate $N$ importance samples of the curves fitted to $xs, ys$ and
-        sample $K$ of them from the weighted posterior distribution."""
+        """Generate $K$ importance samples of the curves fitted to $xs, ys$.
+        Each sample will be drawn from a separate weighted categorical distribution
+        of $N$ importance samples (so that $NK$ samples are taken overall)."""
         choose_ys = jax.vmap(
             lambda ix, v: genjax.ChoiceMapBuilder["ys", ix, "y", "value"].set(v),
         )(jnp.arange(len(ys)), ys)
 
-        k1, k2 = jax.random.split(key)
-        trs, ws = jax.vmap(self.jitted_importance, in_axes=(0, None, None))(
-            jax.random.split(k1, N), choose_ys, (xs,)
+        key1, key2 = jax.random.split(key)
+        samples, log_weights = jax.vmap(
+            self.jitted_importance, in_axes=(0, None, None)
+        )(jax.random.split(key1, N * K), choose_ys, (xs,))
+        # reshape the samples in to K batches of size N
+        log_weights = log_weights.reshape((K, N))
+        winners = jax.vmap(self.categorical_sampler)(
+            jax.random.split(key2, K), log_weights
         )
-        ixs = jax.vmap(jax.jit(genjax.categorical.sampler), in_axes=(0, None))(
-            jax.random.split(k2, K), ws
-        )
-        selected = jax.tree.map(lambda x: x[ixs], trs)
-        return selected
+        # indices returned are relative to the start of the batch from which they were drawn.
+        # globalize the indices by adding back the index of the start of each batch.
+        winners += jnp.arange(0, N * K, N)
+        return jax.tree.map(lambda x: x[winners], samples)

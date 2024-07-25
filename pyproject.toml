@@ -11,8 +11,8 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.10, <3.13"
-genjax = { version = "0.4.0.post4.dev0+9d775c6f", source = "gcp" }
-genstudio = {version = "v2024.06.20.1130", source = "gcp"}
+genjax = { version = "0.5.0.post30.dev0+2df4f579", source = "gcp" }
+genstudio = {version = "2024.7.24.1802", source = "gcp"}
 # genstudio = {path = "../gen-studio", develop = true}
 jax = { version="^0.4.28", extras = ["cpu"] }
 
