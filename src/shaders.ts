@@ -154,68 +154,99 @@ export const computeShader = /* glsl */ `#version 300 es
   #define N_POINTS 10
   #define N_POLY 3
   #define N_SAMPLES 50
+  #define M_PI 3.1415926535897932384626433832795
 
   uniform vec2 points[N_POINTS];
-  uniform vec3 alpha_loc;
-  uniform vec3 alpha_scale;
+  uniform float alpha_loc[6];
+  uniform float alpha_scale[6];
+  uniform uint component_enable;
 
   in uvec3 seed;
-  out vec3 model;
-  flat out uint outliers;
-  out float weight;
-  out vec3 params;
+
+  out float out_0;
+  out float out_1;
+  out float out_2;
+  out float out_3;
+  out float out_4;
+  out float out_5;
+  out float out_weight;
+  out float out_p_outlier;
+  out float out_outliers;
 
   vec3 sample_alpha(inout uvec3 seed) {
-    return vec3(
-      random_normal(seed, alpha_loc[0], alpha_scale[0]),
-      random_normal(seed, alpha_loc[1], alpha_scale[1]),
-      random_normal(seed, alpha_loc[2], alpha_scale[2])
-    );
+    if ((component_enable & 1u) != 0u) {
+      return vec3(
+        random_normal(seed, alpha_loc[0], alpha_scale[0]),
+        random_normal(seed, alpha_loc[1], alpha_scale[1]),
+        random_normal(seed, alpha_loc[2], alpha_scale[2])
+      );
+    } else {
+      return vec3(0.0,0.0,0.0);
+    }
+  }
+
+  vec3 sample_periodic(inout uvec3 seed) {
+    if ((component_enable & 2u) != 0u) {
+      return vec3(
+        random_normal(seed, alpha_loc[3], alpha_scale[3]),
+        random_normal(seed, alpha_loc[4], alpha_scale[4]),
+        random_normal(seed, alpha_loc[5], alpha_scale[5])
+      );
+    } else {
+      return vec3(1.0, 0.0, 0.0);
+    }
   }
 
   float evaluate_poly(vec3 coefficients, float x) {
-    return coefficients[0] + x * coefficients[1] + x * x * coefficients[2];
+    return coefficients.x + x * coefficients.y + x * x * coefficients.z;
   }
 
-  struct result {
-    uint outliers;
-    vec3 model;
-    float weight;
-    float p_outlier;
-  };
+  float evaluate_periodic(vec3 parameters, float x) {
+    return parameters.y * sin(parameters.z + 2.0 * M_PI * x / parameters.x);
+  }
 
-  result curve_fit_importance(inout uvec3 seed) {
+  void curve_fit_importance(inout uvec3 seed) {
     // Find the importance of the model generated from
     // coefficients. The "choice map" in this case is one
     // that sets the ys to the observed values. The model
     // has an outlier probability, two normal ranges for
     // inlier and outlier, and a fixed set of xs. We generate
-    // the y values from the polynomial, and compute the
+    // the y values from the curve, and compute the
     // logpdf of these given the expected values and the
     // outlier choices. Sum all that up and it's the score of
     // the model.
     float w = 0.0;
-    uint outliers = 0u;
+    uint outlier_bits = 0u;
     vec3 coefficients = sample_alpha(seed);
+    vec3 periodic_parameters = sample_periodic(seed); // how to update seed?
     float p_outlier = random_uniform(seed, 0.0, 1.0);
     for (int i = 0; i < N_POINTS; ++i) {
       bool outlier = flip(seed, p_outlier);
-      outliers = outliers | (uint(outlier) << i);
-      float y_model = evaluate_poly(coefficients, points[i].x);
+      outlier_bits = outlier_bits | (uint(outlier) << i);
+      float y_model = 0.0;
+      if ((component_enable & 1u) != 0u) {
+        y_model += evaluate_poly(coefficients, points[i].x);
+      }
+      if ((component_enable & 2u) != 0u) {
+        y_model += evaluate_periodic(periodic_parameters, points[i].x);
+      }
       float y_observed = points[i].y;
       w += logpdf_normal(y_observed, y_model, outlier ? 3.0 : 0.3);
     }
-    return result(outliers, coefficients, w, p_outlier);
+    out_0 = coefficients[0];
+    out_1 = coefficients[1];
+    out_2 = coefficients[2];
+    out_3 = periodic_parameters[0];
+    out_4 = periodic_parameters[1];
+    out_5 = periodic_parameters[2];
+    out_weight = w;
+    out_p_outlier = p_outlier;
+    out_outliers = float(outlier_bits);
   }
 
 
   void main() {
     uvec3 seed = pcg3d(seed);
-    result r = curve_fit_importance(seed);
-    outliers = r.outliers;
-    weight = r.weight;
-    model = r.model;
-    params = vec3(r.p_outlier);
-    //params.x = r.p_outlier;
+    curve_fit_importance(seed);
   }
 `

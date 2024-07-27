@@ -59,16 +59,17 @@ export class WGL2Helper {
         this.gl.transformFeedbackVaryings(
           program,
           varyings,
-          this.gl.SEPARATE_ATTRIBS,
+          this.gl.INTERLEAVED_ATTRIBS,
         )
       }
       this.gl.linkProgram(program)
-      if (this.gl.getProgramParameter(program, this.gl.LINK_STATUS) != null) {
+      if (this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
         this.gl.deleteShader(vShader)
         this.gl.deleteShader(fShader)
         return program
       } else {
         const log = this.gl.getProgramInfoLog(program)
+        console.log(log)
         this.gl.deleteProgram(program)
         throw new Error(log ?? "unknown WebGL2 program creation error")
       }

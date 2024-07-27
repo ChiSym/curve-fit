@@ -30,10 +30,28 @@ body {
   min-height: 100vh;
 }
 
-body #controls {
+#model-components {
   text-align: left;
+  grid-template-columns: 280px 280px;
+  column-gap: 1em;
+  display: grid;
 }
 
+.prior-component-title {
+  text-align: center;
+  font-weight: bold;
+  background-color: #ccc;
+}
+
+#inference-parameters {
+  margin: 4px;
+}
+.value-group {
+  background-color: #cde;
+  border-radius: 8px;
+  margin: 4px;
+  padding: 2px;
+}
 h1 {
   font-size: 3.2em;
   line-height: 1.1;

@@ -5,6 +5,41 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SIR Curve Fit</title>
+
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
+      integrity="sha384-nB0miv6/jRmo5UMMR1wu3Gz6NLsoTkbqJghGIsx//Rlm+ZU03BU6SQNC66uf4l5+"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="preload"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Main-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="preload"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Math-Italic.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="preload"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Size2-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
+    <link
+      rel="preload"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/fonts/KaTeX_Size4-Regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin="anonymous"
+    />
   </head>
 
   <body>
@@ -15,57 +50,211 @@
       FPS: <span id="fps"></span><br />
       IPS: <span id="ips"></span><br />
 
-      <div id="controls">
-        <span>a<sub>0</sub> &mu; : </span>
-        <input type="range" min="-1" max="1" step=".01" value="0" id="a0_mu" />
-        <span id="a0_mu-value"></span>
-        &nbsp;&nbsp;<span class="posterior" id="a0_mu-posterior"></span><br />
-        <span>a<sub>0</sub> &sigma; : </span>
-        <input
-          type="range"
-          min="0"
-          max="2"
-          step=".01"
-          value="2"
-          id="a0_sigma"
-        />
-        <span id="a0_sigma-value"></span>
-        &nbsp;&nbsp;<span class="posterior" id="a0_sigma-posterior"></span
-        ><br />
+      <div id="inference-parameters">
+        <label class="katex" for="N">N = </label>
+        <select id="importanceSamplesPerParticle" name="N">
+          <option value="100">100</option>
+          <option selected="selected" value="1000">1,000</option>
+          <option value="5000">5,000</option>
+          <option value="10000">10,000</option>
+          <option value="50000">50,000</option>
+          <option value="100000">100,000</option></select
+        >&nbsp;&nbsp;
+        <label class="katex" for="K">K = </label>
+        <select id="numParticles" name="K">
+          <option value="1">1</option>
+          <option value="5">5</option>
+          <option value="10">10</option>
+          <option selected="selected" value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <div id="model-components">
+        <div id="polynomial">
+          <div class="prior-component-title">
+            <input
+              class="model-component-enable"
+              id="polynomial_enable"
+              type="checkbox"
+            />
+            polynomial
+            <div class="katex">a_0 + a_1 x + a_2 x^2</div>
+          </div>
 
-        <span>a<sub>1</sub> &mu; : </span>
-        <input type="range" min="-1" max="1" step=".01" value="0" id="a1_mu" />
-        <span id="a1_mu-value"></span>
-        &nbsp;&nbsp;<span class="posterior" id="a1_mu-posterior"></span><br />
-        <span>a<sub>1</sub> &sigma; : </span>
-        <input
-          type="range"
-          min="0"
-          max="2"
-          step=".01"
-          value="2"
-          id="a1_sigma"
-        />
-        <span id="a1_sigma-value"></span>
-        &nbsp;&nbsp;<span class="posterior" id="a1_sigma-posterior"></span
-        ><br />
+          <div class="value-group">
+            <span>a<sub>0</sub> &mu; : </span>
+            <input
+              type="range"
+              min="-1"
+              max="1"
+              step=".01"
+              value="0"
+              id="a_0_mu"
+            />
+            <span id="a_0_mu-value"></span>
+            &nbsp;&nbsp;<span class="posterior" id="a_0_mu-posterior"></span
+            ><br />
+            <span>a<sub>0</sub> &sigma; : </span>
+            <input
+              type="range"
+              min="0"
+              max="2"
+              step=".01"
+              value="2"
+              id="a_0_sigma"
+            />
+            <span id="a_0_sigma-value"></span>
+            &nbsp;&nbsp;<span class="posterior" id="a_0_sigma-posterior"></span
+            ><br />
+          </div>
 
-        <span>a<sub>2</sub> &mu; : </span>
-        <input type="range" min="-1" max="1" step=".01" value="0" id="a2_mu" />
-        <span id="a2_mu-value"></span>
-        &nbsp;&nbsp;<span class="posterior" id="a2_mu-posterior"></span><br />
-        <span>a<sub>2</sub> &sigma; : </span>
-        <input
-          type="range"
-          min="0"
-          max="2"
-          step=".01"
-          value="2"
-          id="a2_sigma"
-        />
-        <span id="a2_sigma-value"></span>
-        &nbsp;&nbsp;<span class="posterior" id="a2_sigma-posterior"></span
-        ><br />
+          <div class="value-group">
+            <span>a<sub>1</sub> &mu; : </span>
+            <input
+              type="range"
+              min="-1"
+              max="1"
+              step=".01"
+              value="0"
+              id="a_1_mu"
+            />
+            <span id="a_1_mu-value"></span>
+            &nbsp;&nbsp;<span class="posterior" id="a_1_mu-posterior"></span
+            ><br />
+            <span>a<sub>1</sub> &sigma; : </span>
+            <input
+              type="range"
+              min="0"
+              max="2"
+              step=".01"
+              value="2"
+              id="a_1_sigma"
+            />
+            <span id="a_1_sigma-value"></span>
+            &nbsp;&nbsp;<span class="posterior" id="a_1_sigma-posterior"></span
+            ><br />
+          </div>
+
+          <div class="value-group">
+            <span>a<sub>2</sub> &mu; : </span>
+            <input
+              type="range"
+              min="-1"
+              max="1"
+              step=".01"
+              value="0"
+              id="a_2_mu"
+            />
+            <span id="a_2_mu-value"></span>
+            &nbsp;&nbsp;<span class="posterior" id="a_2_mu-posterior"></span
+            ><br />
+            <span>a<sub>2</sub> &sigma; : </span>
+            <input
+              type="range"
+              min="0"
+              max="2"
+              step=".01"
+              value="2"
+              id="a_2_sigma"
+            />
+            <span id="a_2_sigma-value"></span>
+            &nbsp;&nbsp;<span class="posterior" id="a_2_sigma-posterior"></span
+            ><br />
+          </div>
+        </div>
+        <div id="periodic">
+          <div class="prior-component-title">
+            <input
+              class="model-component-enable"
+              id="periodic_enable"
+              type="checkbox"
+            />
+            periodic
+            <div class="katex">A\sin(\phi + \frac{2\pi x}{T})</div>
+          </div>
+
+          <div class="value-group">
+            <span>T &mu; : </span>
+            <input
+              type="range"
+              min="0.1"
+              max="3"
+              step=".01"
+              value="0"
+              id="T_mu"
+            />
+            <span id="T_mu-value"></span>
+            &nbsp;&nbsp;<span class="posterior" id="T_mu-posterior"></span
+            ><br />
+            <span>T &sigma; : </span>
+            <input
+              type="range"
+              min="0"
+              max="2"
+              step=".01"
+              value="2"
+              id="T_sigma"
+            />
+            <span id="T_sigma-value"></span>
+            &nbsp;&nbsp;<span class="posterior" id="T_sigma-posterior"></span
+            ><br />
+          </div>
+
+          <div class="value-group">
+            <span>A &mu; : </span>
+            <input
+              type="range"
+              min="0"
+              max="2"
+              step=".01"
+              value="0"
+              id="A_mu"
+            />
+            <span id="A_mu-value"></span>
+            &nbsp;&nbsp;<span class="posterior" id="A_mu-posterior"></span
+            ><br />
+            <span>A &sigma; : </span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step=".01"
+              value="0.5"
+              id="A_sigma"
+            />
+            <span id="A_sigma-value"></span>
+            &nbsp;&nbsp;<span class="posterior" id="A_sigma-posterior"></span
+            ><br />
+          </div>
+
+          <div class="value-group">
+            <span>φ &mu; : </span>
+            <input
+              type="range"
+              min="-3.14"
+              max="3.14"
+              step=".01"
+              value="0"
+              id="phi_mu"
+            />
+            <span id="phi_mu-value"></span>
+            &nbsp;&nbsp;<span class="posterior" id="phi_mu-posterior"></span
+            ><br />
+            <span>φ &sigma; : </span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step=".01"
+              value="1"
+              id="phi_sigma"
+            />
+            <span id="phi_sigma-value"></span>
+            &nbsp;&nbsp;<span class="posterior" id="phi_sigma-posterior"></span
+            ><br />
+          </div>
+        </div>
 
         p_outlier: <span id="p_outlier"></span><br />
       </div>

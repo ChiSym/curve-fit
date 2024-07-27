@@ -6,9 +6,9 @@ export class Render {
   private readonly pointsLoc: WebGLUniformLocation
   private readonly canvasSizeLoc: WebGLUniformLocation
   private readonly nModelsLoc: WebGLUniformLocation
-  private readonly polysLoc: WebGLUniformLocation
+  private readonly coefficientsLoc: WebGLUniformLocation
   private readonly outliersLoc: WebGLUniformLocation
-  private readonly paramsLoc: WebGLUniformLocation
+  private readonly pOutliersLoc: WebGLUniformLocation
   private readonly gl: WebGL2RenderingContext
   private readonly program: WebGLProgram
   canvas: HTMLCanvasElement
@@ -33,9 +33,9 @@ export class Render {
     this.pointsLoc = wgl.getUniformLocation(program, "points")
     this.canvasSizeLoc = wgl.getUniformLocation(program, "canvas_size")
     this.nModelsLoc = wgl.getUniformLocation(program, "n_models")
-    this.polysLoc = wgl.getUniformLocation(program, "polys")
+    this.coefficientsLoc = wgl.getUniformLocation(program, "coefficients")
     this.outliersLoc = wgl.getUniformLocation(program, "outliers")
-    this.paramsLoc = wgl.getUniformLocation(program, "params")
+    this.pOutliersLoc = wgl.getUniformLocation(program, "p_outliers")
 
     // Set up full canvas clip space quad (this is two triangles that
     // together cover the space [-1,1] x [-1,1], the point being that
@@ -72,14 +72,17 @@ export class Render {
     gl.uniform2f(this.canvasSizeLoc, gl.canvas.width, gl.canvas.height)
     gl.uniform2fv(this.pointsLoc, points.flat(), 0, 2 * points.length)
     gl.uniform1ui(this.nModelsLoc, models.length)
-    gl.uniform3fv(this.polysLoc, models.map((m) => Array.from(m.model)).flat())
+    gl.uniform1fv(
+      this.coefficientsLoc,
+      models.map((m) => Array.from(m.model)).flat(),
+    )
     gl.uniform1uiv(
       this.outliersLoc,
-      models.map((m) => m.outliers),
+      models.map((m) => m.outlier),
     )
-    gl.uniform3fv(
-      this.paramsLoc,
-      models.map((m) => Array.from(m.params)).flat(),
+    gl.uniform1fv(
+      this.pOutliersLoc,
+      models.map((m) => m.p_outlier),
     )
     gl.clearColor(0.5, 0.5, 0.5, 1.0)
     gl.clear(gl.COLOR_BUFFER_BIT)
@@ -90,13 +93,16 @@ export class Render {
 const renderShader = /* glsl */ `#version 300 es
 precision highp float;
 #define N_POINTS 10
-#define MAX_N_MODELS 100
+#define MAX_N_MODELS 100u
+#define MODEL_SIZE 6u
+#define M_PI 3.1415926535897932384626433832795
+
 uniform vec2 canvas_size;
 uniform uint n_models;
 uniform vec2 points[N_POINTS];
-uniform vec3 polys[MAX_N_MODELS];
+uniform float coefficients[MAX_N_MODELS * MODEL_SIZE];
 uniform uint outliers[MAX_N_MODELS];
-uniform vec3 params[MAX_N_MODELS];
+uniform float p_outliers[MAX_N_MODELS];
 
 out vec4 out_color;
 //uniform vec3 models[];
@@ -124,7 +130,7 @@ void main() {
     out_color = vec4(0.0,0.5,0.0,0.8);
     uint circle_count = 0u;
     for (uint j = 0u; j < n_models; ++j) {
-      if (abs(d - params[j].x) < 0.002) {
+      if (abs(d - p_outliers[j]) < 0.002) {
         out_color.g *= 0.8;
         ++circle_count;
       }
@@ -133,11 +139,18 @@ void main() {
   }
 
   uint curve_count = 0u;
-  for (uint i = 0u; i < n_models; ++i) {
-    vec3 poly = polys[i];
+  for (uint i = 0u, ci = 0u; i < n_models; ++i) {
+    float a0 = coefficients[ci++];
+    float a1 = coefficients[ci++];
+    float a2 = coefficients[ci++];
+    float T = coefficients[ci++];
+    float A = coefficients[ci++];
+    float phi = coefficients[ci++];
+
     vec2 p;
     p.x = xy.x;
-    p.y = poly[0] + p.x * poly[1] + p.x * p.x * poly[2];
+    p.y = a0 + p.x * a1 + p.x * p.x * a2;       // polynomial part
+    p.y += A * sin(phi + 2.0 * M_PI * p.x / T); // periodic part
     float d = distance(p, xy);
     if (d < 0.01) {
       curve_count += 1u;
