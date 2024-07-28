@@ -139,9 +139,8 @@ void main() {
     float Fxy = xy.y - p.y;
     vec2 GFxy = vec2(dFdx(Fxy), dFdy(Fxy));
     float sd = Fxy / length(GFxy);
-    if (abs(sd) < 1.0) out_color = mix(vec4(0.0, 0.0, 0.0, 0.0), out_color, 0.4);
+    if (abs(sd) < 1.0) out_color = mix(vec4(0.0, 0.0, 0.0, 1.0), out_color, 0.65);
   }
-
 
   for (int i = 0; i < N_POINTS; ++i) {
     float d = distance(points[i], xy);
