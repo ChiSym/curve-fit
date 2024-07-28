@@ -46,6 +46,10 @@ body {
 #inference-parameters {
   margin: 4px;
 }
+
+#empty-posterior {
+  color: red;
+}
 .value-group {
   background-color: #cde;
   border-radius: 8px;
@@ -125,4 +129,11 @@ button:focus-visible {
   button {
     background-color: #f9f9f9;
   }
+}
+
+@media (prefers-color-scheme: dark) {
+  div#model-components {
+    color: #222;
+  }
+
 }

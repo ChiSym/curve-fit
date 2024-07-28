@@ -20,9 +20,10 @@ export interface InferenceParameters {
   importanceSamplesPerParticle: number
 }
 
-interface InferenceResult {
+export interface InferenceResult {
   selectedModels: Model[]
   ips: number
+  failedSamples: number
 }
 
 export class GPGPU_Inference {
@@ -34,6 +35,7 @@ export class GPGPU_Inference {
     "out_3",
     "out_4",
     "out_5",
+//    "out_6",
     "out_weight",
     "out_p_outlier",
     "out_outliers",
@@ -205,17 +207,15 @@ export class GPGPU_Inference {
       0,
       N * this.floatsPerSeed,
     )
-    //console.log('bigarray', this.bigArray.subarray(0, 100))
+    console.log('bigarray', this.bigArray.subarray(0, 100))
     const a = this.bigArray
     for (let i = 0, p = 0; i < N; ++i, p += this.floatsPerSeed) {
       const m_i = i * MODEL_SIZE
       this.model.set(a.subarray(p, p + MODEL_SIZE), m_i)
-      this.weight[i] = a[p + 6]
-      this.p_outlier[i] = a[p + 7]
-      this.outlier[i] = a[p + 8]
+      this.weight[i] = a[p + MODEL_SIZE]
+      this.p_outlier[i] = a[p + MODEL_SIZE + 1]
+      this.outlier[i] = a[p + MODEL_SIZE + 2]
     }
-    //console.log('this.model', this.model)
-    //console.log('er', gl.getError())
     // TODO: unbind
 
     // INSPECT RESULTS
@@ -229,7 +229,7 @@ export class GPGPU_Inference {
 
   private logsumexp(a: Float32Array): number {
     let sumExp = 0.0
-    for (let i = 0; i < a.length; ++i) sumExp += Math.exp(a[i])
+    a.forEach(v => sumExp += Math.exp(v))
     return Math.log(sumExp)
   }
 
@@ -243,6 +243,8 @@ export class GPGPU_Inference {
     inferenceParameters: InferenceParameters,
   ): InferenceResult {
     let inferenceTime = 0.0
+    let failedSamples = 0
+    let modelIndex = 0
     const selectedModels: Model[] = new Array(inferenceParameters.numParticles)
     const t0 = performance.now()
     for (let i = 0; i < inferenceParameters.numParticles; ++i) {
@@ -262,23 +264,24 @@ export class GPGPU_Inference {
         accumulatedProb += weights[targetIndex]
         if (accumulatedProb >= z) break
       }
-      if (targetIndex >= weights.length) {
+      if (targetIndex < weights.length) {
+        selectedModels[modelIndex++] = {
+          model: results.model.slice(
+            targetIndex * MODEL_SIZE,
+            targetIndex * MODEL_SIZE + MODEL_SIZE,
+          ),
+          outlier: results.outlier[targetIndex],
+          p_outlier: results.p_outlier[targetIndex],
+          weight: results.weight[targetIndex],
+        }
+      } else {
         // log('info', `oddly enough, the weights table ran out of probability for ${z} : ${accumulated_prob}`)
         // the above happens more often than I thought it would.
         // TODO: figure out why. theories:
         // 1) the model can generate a weight of NaN somehow
         // 2) all samples are so absurdly unlikely that the total probability
         //    content representable in double is 0.0, so that we cannot normalize
-        targetIndex = weights.length - 1
-      }
-      selectedModels[i] = {
-        model: results.model.slice(
-          targetIndex * MODEL_SIZE,
-          targetIndex * MODEL_SIZE + MODEL_SIZE,
-        ),
-        outlier: results.outlier[targetIndex],
-        p_outlier: results.p_outlier[targetIndex],
-        weight: results.weight[targetIndex],
+        ++failedSamples
       }
     }
     inferenceTime += performance.now() - t0
@@ -287,8 +290,9 @@ export class GPGPU_Inference {
         inferenceParameters.importanceSamplesPerParticle) /
       (inferenceTime / 1e3)
     return {
-      selectedModels,
+      selectedModels: selectedModels.slice(0, modelIndex),
       ips,
+      failedSamples
     }
   }
 

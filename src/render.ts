@@ -1,5 +1,5 @@
-import type { Model } from "./model.ts"
 import { WGL2Helper } from "./webgl.ts"
+import { InferenceResult } from "./gpgpu.ts"
 
 export class Render {
   private readonly positionLoc: number
@@ -8,7 +8,6 @@ export class Render {
   private readonly nModelsLoc: WebGLUniformLocation
   private readonly coefficientsLoc: WebGLUniformLocation
   private readonly outliersLoc: WebGLUniformLocation
-  private readonly pOutliersLoc: WebGLUniformLocation
   private readonly gl: WebGL2RenderingContext
   private readonly program: WebGLProgram
   canvas: HTMLCanvasElement
@@ -35,7 +34,6 @@ export class Render {
     this.nModelsLoc = wgl.getUniformLocation(program, "n_models")
     this.coefficientsLoc = wgl.getUniformLocation(program, "coefficients")
     this.outliersLoc = wgl.getUniformLocation(program, "outliers")
-    this.pOutliersLoc = wgl.getUniformLocation(program, "p_outliers")
 
     // Set up full canvas clip space quad (this is two triangles that
     // together cover the space [-1,1] x [-1,1], the point being that
@@ -65,13 +63,14 @@ export class Render {
     this.program = program
   }
 
-  render(points: number[][], models: Model[]): void {
+  render(points: number[][], result: InferenceResult): void {
     const gl = this.gl
+    const models = result.selectedModels
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
     gl.useProgram(this.program)
     gl.uniform2f(this.canvasSizeLoc, gl.canvas.width, gl.canvas.height)
     gl.uniform2fv(this.pointsLoc, points.flat(), 0, 2 * points.length)
-    gl.uniform1ui(this.nModelsLoc, models.length)
+    gl.uniform1ui(this.nModelsLoc, result.selectedModels.length)
     gl.uniform1fv(
       this.coefficientsLoc,
       models.map((m) => Array.from(m.model)).flat(),
@@ -79,10 +78,6 @@ export class Render {
     gl.uniform1uiv(
       this.outliersLoc,
       models.map((m) => m.outlier),
-    )
-    gl.uniform1fv(
-      this.pOutliersLoc,
-      models.map((m) => m.p_outlier),
     )
     gl.clearColor(0.5, 0.5, 0.5, 1.0)
     gl.clear(gl.COLOR_BUFFER_BIT)
@@ -94,7 +89,7 @@ const renderShader = /* glsl */ `#version 300 es
 precision highp float;
 #define N_POINTS 10
 #define MAX_N_MODELS 100u
-#define MODEL_SIZE 6u
+#define MODEL_SIZE 7u
 #define M_PI 3.1415926535897932384626433832795
 
 uniform vec2 canvas_size;
@@ -102,7 +97,6 @@ uniform uint n_models;
 uniform vec2 points[N_POINTS];
 uniform float coefficients[MAX_N_MODELS * MODEL_SIZE];
 uniform uint outliers[MAX_N_MODELS];
-uniform float p_outliers[MAX_N_MODELS];
 
 out vec4 out_color;
 //uniform vec3 models[];
@@ -111,61 +105,60 @@ void main() {
   // Map pixel coordinates [0,w) x [0,h) to the unit square [-1, 1) x [-1, 1)
   vec2 xy = gl_FragCoord.xy / canvas_size.xy * 2.0 + vec2(-1.0,-1.0);
 
-  for (int i = 0; i < N_POINTS; ++i) {
+  // background
+  out_color = vec4(0.85,0.85,0.85,1.0);
 
-    float d = distance(points[i], xy);
-    // might need a smoothstep in here to antialias
-    if (d < 0.02) {
-      // find out how many times this one is considered an outlier
-      int outlier_count = 0;
-      for (uint j = 0u; j < n_models; ++j) {
-        if ((outliers[j] & (1u << i)) != 0u) {
-          ++outlier_count;
-        }
-      }
-      float outlier_frac = float(outlier_count) / float(n_models);
-      out_color = outlier_frac * vec4(1.0,0.0,0.0,1.0) + (1.0-outlier_frac) * vec4(0.0,0.6,1.0,1.0);
-      return;
-    }
-    out_color = vec4(0.0,0.5,0.0,0.8);
-    uint circle_count = 0u;
-    for (uint j = 0u; j < n_models; ++j) {
-      if (abs(d - p_outliers[j]) < 0.002) {
-        out_color.g *= 0.8;
-        ++circle_count;
-      }
-    }
-    // if (circle_count > 0u) return;
+  // rules
+  if (mod(xy.x, 0.1) < 0.01 || mod(xy.y, 0.1) < 0.01) {
+    out_color = vec4(0.9,0.9,1.0,1.0);
   }
 
-  uint curve_count = 0u;
+  // axes
+  if (abs(xy.x) < 0.006 || abs(xy.y) < 0.006) {
+    out_color = (vec4(1.0,1.0,1.0,1.0));
+  }
+
+  // curves: blended
   for (uint i = 0u, ci = 0u; i < n_models; ++i) {
     float a0 = coefficients[ci++];
     float a1 = coefficients[ci++];
     float a2 = coefficients[ci++];
-    float T = coefficients[ci++];
+    float omega = coefficients[ci++];
     float A = coefficients[ci++];
     float phi = coefficients[ci++];
 
     vec2 p;
     p.x = xy.x;
     p.y = a0 + p.x * a1 + p.x * p.x * a2;       // polynomial part
-    p.y += A * sin(phi + 2.0 * M_PI * p.x / T); // periodic part
-    float d = distance(p, xy);
-    if (d < 0.01) {
-      curve_count += 1u;
-    }
+    p.y += A * sin(phi + omega * p.x); // periodic part
+
+    // signed_distance to the implicit curve F(x, y) = 0 is
+    //   F(x, y) / norm(grad(F)(x, y))
+    // We have y = f(x), so F(x, y) = y - f(x)
+
+    float Fxy = xy.y - p.y;
+    vec2 GFxy = vec2(dFdx(Fxy), dFdy(Fxy));
+    float sd = Fxy / length(GFxy);
+    if (abs(sd) < 1.0) out_color = mix(vec4(0.0, 0.0, 0.0, 0.0), out_color, 0.4);
   }
-  if (curve_count > 0u) {
-    float base = 0.7;
-    float g = base * pow(0.8, float(curve_count));
-    out_color = vec4(g,g,g,1.0);
-  } else if (abs(xy.x) < 0.006 || abs(xy.y) < 0.006) {
-    out_color = (vec4(1.0,1.0,1.0,1.0));
-  } else if (mod(xy.x, 0.1) < 0.01 || mod(xy.y, 0.1) < 0.01) {
-    out_color = vec4(0.9,0.9,1.0,1.0);
-  } else {
-    out_color = vec4(0.85,0.85,0.85,1.0);
+
+
+  for (int i = 0; i < N_POINTS; ++i) {
+    float d = distance(points[i], xy);
+    // might need a smoothstep in here to antialias
+    for (uint j = 0u; j < n_models; ++j) {
+      if (d < 0.025) {
+        // find out how many times this one is considered an outlier
+        int outlier_count = 0;
+        for (uint j = 0u; j < n_models; ++j) {
+          if ((outliers[j] & (1u << i)) != 0u) {
+            ++outlier_count;
+          }
+        }
+        float outlier_frac = float(outlier_count) / float(n_models);
+        out_color = outlier_frac * vec4(1.0,0.0,0.0,1.0) + (1.0-outlier_frac) * vec4(0.0,0.6,1.0,1.0);
+      }
+    }
   }
 }
 `

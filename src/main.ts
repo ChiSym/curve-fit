@@ -34,9 +34,10 @@ const params = [
   { name: "a_0", initialValue: { mu: 0, sigma: 2 } },
   { name: "a_1", initialValue: { mu: 0, sigma: 2 } },
   { name: "a_2", initialValue: { mu: 0, sigma: 2 } },
-  { name: "T", initialValue: { mu: 0, sigma: 2 } },
+  { name: "omega", initialValue: { mu: 0, sigma: 2 } },
   { name: "A", initialValue: { mu: 0, sigma: 2 } },
   { name: "phi", initialValue: { mu: 0, sigma: 2 } },
+  { name: "inlier", initialValue: { mu: 0.3, sigma: 0.1 } }, // TODO: change to uniform
 ]
 
 const model_components = ["polynomial", "periodic"]
@@ -112,6 +113,8 @@ function main(): void {
       if (vElt != null) {
         vElt.innerText = elt.valueAsNumber.toFixed(2)
       }
+    } else {
+      console.log(`cannot find ${elementName}`)
     }
   }
 
@@ -195,61 +198,76 @@ function main(): void {
     ?.addEventListener("click", () => {
       alpha = initialAlpha()
       setSliderValues(alpha)
+      totalFailedSamples = 0
+      pause.checked = false
     })
 
+  const emptyPosterior = document.querySelector<HTMLSpanElement>("#empty-posterior")!
+  const pause = document.querySelector<HTMLInputElement>("#pause")!
+
   // render math
-  const mathElements = document.getElementsByClassName("katex")
+  const mathElements = document.querySelectorAll<HTMLElement>(".katex")
   Array.from(mathElements).forEach((el) => {
-    katex.render(el.textContent, el, {
-      throwOnError: false,
-    })
+    if (el.textContent) {
+      katex.render(el.textContent, el, {
+        throwOnError: false,
+      })
+    }
   })
   let frameCount = 0
   let t0 = 0
+  let totalFailedSamples = 0
 
   function frame(t: DOMHighResTimeStamp): void {
+    let result = undefined
     try {
-      const { selectedModels, ips } = gpu.inference(
-        {
-          points,
-          coefficients: alpha,
-          component_enable: modelEnable,
-        },
-        inferenceParameters,
-      )
+      if (!pause.checked) {
+        result = gpu.inference(
+          {
+            points,
+            coefficients: alpha,
+            component_enable: modelEnable,
+          },
+          inferenceParameters,
+        )
+      }
+      if (result) {
+        totalFailedSamples += result.failedSamples
 
-      for (const m of selectedModels) {
-        for (let i = 0; i < MODEL_SIZE; ++i) {
-          stats[i].observe(m.model[i])
+        for (const m of result.selectedModels) {
+          for (let j = 0; j < MODEL_SIZE; ++j) {
+            stats[j].observe(m.model[j])
+          }
         }
-      }
-      if (t0 === 0) {
-        t0 = t
-      }
-      ++frameCount
-      if (frameCount % 200 === 0) {
-        const fps = Math.trunc(frameCount / ((t - t0) / 1e3))
-        setInnerText("#fps", fps.toString())
-        setInnerText("#ips", `${(ips / 1e6).toFixed(1)} M`)
-        frameCount = 0
-        t0 = 0
-      }
-      if (frameCount % 50 === 0) {
-        for (let i = 0; i < MODEL_SIZE; ++i) {
-          const s = stats[i].summarize()
-          setInnerText(
-            `#${params[i].name}_mu-posterior`,
-            s.mu.toFixed(2).toString(),
-          )
-          setInnerText(
-            `#${params[i].name}_sigma-posterior`,
-            s.sigma.toFixed(2).toString(),
-          )
+        if (t0 === 0) {
+          t0 = t
         }
+        ++frameCount
+        if (frameCount % 200 === 0) {
+          const fps = Math.trunc(frameCount / ((t - t0) / 1e3))
+          setInnerText("#fps", fps.toString())
+          setInnerText("#ips", `${(result.ips / 1e6).toFixed(1)} M`)
+          frameCount = 0
+          t0 = 0
+        }
+        if (frameCount % 50 === 0) {
+          for (let i = 0; i < MODEL_SIZE; ++i) {
+            const s = stats[i].summarize()
+            setInnerText(
+              `#${params[i].name}_mu-posterior`,
+              s.mu.toFixed(2).toString(),
+            )
+            setInnerText(
+              `#${params[i].name}_sigma-posterior`,
+              s.sigma.toFixed(2).toString(),
+            )
+          }
+        }
+        // const ols = selected_models.map(m => m.p_outlier.toFixed(2).toString()).join(', ')
+        // document.querySelector<HTMLSpanElement>('#p_outlier')!.innerText = ols
+        renderer.render(points, result)
       }
-      // const ols = selected_models.map(m => m.p_outlier.toFixed(2).toString()).join(', ')
-      // document.querySelector<HTMLSpanElement>('#p_outlier')!.innerText = ols
-      renderer.render(points, selectedModels)
+      emptyPosterior.innerText = totalFailedSamples.toString()
       requestAnimationFrame(frame)
     } catch (error) {
       log("error", error)

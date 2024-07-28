@@ -71,96 +71,127 @@
         </select>
       </div>
       <div id="model-components">
-        <div id="polynomial">
-          <div class="prior-component-title">
-            <input
-              class="model-component-enable"
-              id="polynomial_enable"
-              type="checkbox"
-            />
-            polynomial
-            <div class="katex">a_0 + a_1 x + a_2 x^2</div>
+        <div class="column">
+          <div id="polynomial">
+            <div class="prior-component-title">
+              <input
+                class="model-component-enable"
+                id="polynomial_enable"
+                type="checkbox"
+              />
+              polynomial
+              <div class="katex">a_0 + a_1 x + a_2 x^2</div>
+            </div>
+            <div class="value-group">
+              <span>a<sub>0</sub> &mu; : </span>
+              <input
+                type="range"
+                min="-1"
+                max="1"
+                step=".01"
+                value="0"
+                id="a_0_mu"
+              />
+              <span id="a_0_mu-value"></span>
+              &nbsp;&nbsp;<span class="posterior" id="a_0_mu-posterior"></span
+              ><br />
+              <span>a<sub>0</sub> &sigma; : </span>
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step=".01"
+                value="2"
+                id="a_0_sigma"
+              />
+              <span id="a_0_sigma-value"></span>
+              &nbsp;&nbsp;<span class="posterior" id="a_0_sigma-posterior"></span
+              ><br />
+            </div>
+            <div class="value-group">
+              <span>a<sub>1</sub> &mu; : </span>
+              <input
+                type="range"
+                min="-1"
+                max="1"
+                step=".01"
+                value="0"
+                id="a_1_mu"
+              />
+              <span id="a_1_mu-value"></span>
+              &nbsp;&nbsp;<span class="posterior" id="a_1_mu-posterior"></span
+              ><br />
+              <span>a<sub>1</sub> &sigma; : </span>
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step=".01"
+                value="2"
+                id="a_1_sigma"
+              />
+              <span id="a_1_sigma-value"></span>
+              &nbsp;&nbsp;<span class="posterior" id="a_1_sigma-posterior"></span
+              ><br />
+            </div>
+            <div class="value-group">
+              <span>a<sub>2</sub> &mu; : </span>
+              <input
+                type="range"
+                min="-1"
+                max="1"
+                step=".01"
+                value="0"
+                id="a_2_mu"
+              />
+              <span id="a_2_mu-value"></span>
+              &nbsp;&nbsp;<span class="posterior" id="a_2_mu-posterior"></span
+              ><br />
+              <span>a<sub>2</sub> &sigma; : </span>
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step=".01"
+                value="2"
+                id="a_2_sigma"
+              />
+              <span id="a_2_sigma-value"></span>
+              &nbsp;&nbsp;<span class="posterior" id="a_2_sigma-posterior"></span
+              ><br />
+            </div>
           </div>
+          <div id="inlier">
+            <div class="prior-component-title">
+              inlier &sigma; (not working yet)
+            </div>
+            <div class="value-group">
+              <span>&emsp;&nbsp;&mu; : </span>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step=".01"
+                value="0.3"
+                id="inlier_mu"
+              />
+              <span id="inlier_mu-value"></span>
+              &nbsp;&nbsp;<span class="posterior" id="inlier_mu-posterior"></span
+              ><br />
+              <span>&emsp;&nbsp;&sigma; : </span>
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step=".01"
+                value="2"
+                id="inlier_sigma"
+              />
+              <span id="inlier_sigma-value"></span>
+              &nbsp;&nbsp;<span class="posterior" id="inlier_sigma-posterior"></span
+              ><br />
+            </div>
 
-          <div class="value-group">
-            <span>a<sub>0</sub> &mu; : </span>
-            <input
-              type="range"
-              min="-1"
-              max="1"
-              step=".01"
-              value="0"
-              id="a_0_mu"
-            />
-            <span id="a_0_mu-value"></span>
-            &nbsp;&nbsp;<span class="posterior" id="a_0_mu-posterior"></span
-            ><br />
-            <span>a<sub>0</sub> &sigma; : </span>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step=".01"
-              value="2"
-              id="a_0_sigma"
-            />
-            <span id="a_0_sigma-value"></span>
-            &nbsp;&nbsp;<span class="posterior" id="a_0_sigma-posterior"></span
-            ><br />
-          </div>
-
-          <div class="value-group">
-            <span>a<sub>1</sub> &mu; : </span>
-            <input
-              type="range"
-              min="-1"
-              max="1"
-              step=".01"
-              value="0"
-              id="a_1_mu"
-            />
-            <span id="a_1_mu-value"></span>
-            &nbsp;&nbsp;<span class="posterior" id="a_1_mu-posterior"></span
-            ><br />
-            <span>a<sub>1</sub> &sigma; : </span>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step=".01"
-              value="2"
-              id="a_1_sigma"
-            />
-            <span id="a_1_sigma-value"></span>
-            &nbsp;&nbsp;<span class="posterior" id="a_1_sigma-posterior"></span
-            ><br />
-          </div>
-
-          <div class="value-group">
-            <span>a<sub>2</sub> &mu; : </span>
-            <input
-              type="range"
-              min="-1"
-              max="1"
-              step=".01"
-              value="0"
-              id="a_2_mu"
-            />
-            <span id="a_2_mu-value"></span>
-            &nbsp;&nbsp;<span class="posterior" id="a_2_mu-posterior"></span
-            ><br />
-            <span>a<sub>2</sub> &sigma; : </span>
-            <input
-              type="range"
-              min="0"
-              max="2"
-              step=".01"
-              value="2"
-              id="a_2_sigma"
-            />
-            <span id="a_2_sigma-value"></span>
-            &nbsp;&nbsp;<span class="posterior" id="a_2_sigma-posterior"></span
-            ><br />
           </div>
         </div>
         <div id="periodic">
@@ -171,33 +202,33 @@
               type="checkbox"
             />
             periodic
-            <div class="katex">A\sin(\phi + \frac{2\pi x}{T})</div>
+            <div class="katex">A\sin(\phi + \omega x)</div>
           </div>
 
           <div class="value-group">
-            <span>T &mu; : </span>
+            <span>&omega; &mu; : </span>
             <input
               type="range"
               min="0.1"
-              max="3"
+              max="50"
               step=".01"
-              value="0"
-              id="T_mu"
+              value="8"
+              id="omega_mu"
             />
-            <span id="T_mu-value"></span>
-            &nbsp;&nbsp;<span class="posterior" id="T_mu-posterior"></span
+            <span id="omega_mu-value"></span>
+            &nbsp;&nbsp;<span class="posterior" id="omega_mu-posterior"></span
             ><br />
-            <span>T &sigma; : </span>
+            <span>&omega; &sigma; : </span>
             <input
               type="range"
               min="0"
               max="2"
               step=".01"
-              value="2"
-              id="T_sigma"
+              value="0.2"
+              id="omega_sigma"
             />
-            <span id="T_sigma-value"></span>
-            &nbsp;&nbsp;<span class="posterior" id="T_sigma-posterior"></span
+            <span id="omega_sigma-value"></span>
+            &nbsp;&nbsp;<span class="posterior" id="omega_sigma-posterior"></span
             ><br />
           </div>
 
@@ -229,7 +260,7 @@
           </div>
 
           <div class="value-group">
-            <span>φ &mu; : </span>
+            <span>&phi; &mu; : </span>
             <input
               type="range"
               min="-3.14"
@@ -241,7 +272,7 @@
             <span id="phi_mu-value"></span>
             &nbsp;&nbsp;<span class="posterior" id="phi_mu-posterior"></span
             ><br />
-            <span>φ &sigma; : </span>
+            <span>&phi; &sigma; : </span>
             <input
               type="range"
               min="0"
@@ -255,10 +286,12 @@
             ><br />
           </div>
         </div>
-
-        p_outlier: <span id="p_outlier"></span><br />
       </div>
-
+      <div id="other-parameters">
+        p_outlier: <span id="p_outlier">not working yet</span><br />
+        empty posterior: <span id="empty-posterior"></span><br/>
+        <input id="pause" type="checkbox" /><label for="pause">pause</label>
+      </div>
       <div class="card">
         <button id="sir" type="button">Update my priors, SIR!</button>
         <button id="reset-priors" type="button">Reset</button>

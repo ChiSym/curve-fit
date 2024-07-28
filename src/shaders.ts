@@ -169,6 +169,7 @@ export const computeShader = /* glsl */ `#version 300 es
   out float out_3;
   out float out_4;
   out float out_5;
+//  out float out_6;
   out float out_weight;
   out float out_p_outlier;
   out float out_outliers;
@@ -181,7 +182,7 @@ export const computeShader = /* glsl */ `#version 300 es
         random_normal(seed, alpha_loc[2], alpha_scale[2])
       );
     } else {
-      return vec3(0.0,0.0,0.0);
+      return vec3(0.0, 0.0, 0.0);
     }
   }
 
@@ -193,16 +194,18 @@ export const computeShader = /* glsl */ `#version 300 es
         random_normal(seed, alpha_loc[5], alpha_scale[5])
       );
     } else {
-      return vec3(1.0, 0.0, 0.0);
+      return vec3(0.0, 0.0, 0.0);
     }
   }
 
   float evaluate_poly(vec3 coefficients, float x) {
+    // components x, y, z map to a_0, a_1, a_2
     return coefficients.x + x * coefficients.y + x * x * coefficients.z;
   }
 
   float evaluate_periodic(vec3 parameters, float x) {
-    return parameters.y * sin(parameters.z + 2.0 * M_PI * x / parameters.x);
+    // components x, y, z map to omega, A, phi
+    return parameters.y * sin(parameters.z + parameters.x * x);
   }
 
   void curve_fit_importance(inout uvec3 seed) {
@@ -215,6 +218,8 @@ export const computeShader = /* glsl */ `#version 300 es
     // logpdf of these given the expected values and the
     // outlier choices. Sum all that up and it's the score of
     // the model.
+    //float inlier_sigma = random_normal(seed, alpha_loc[6], alpha_scale[6]);
+    float inlier_sigma = 0.3;
     float w = 0.0;
     uint outlier_bits = 0u;
     vec3 coefficients = sample_alpha(seed);
@@ -231,7 +236,11 @@ export const computeShader = /* glsl */ `#version 300 es
         y_model += evaluate_periodic(periodic_parameters, points[i].x);
       }
       float y_observed = points[i].y;
-      w += logpdf_normal(y_observed, y_model, outlier ? 3.0 : 0.3);
+      w += logpdf_normal(y_observed, y_model, outlier ? 3.0 : inlier_sigma);
+      //if (!outlier) {
+      //  w += logpdf_normal(y_observed, y_model, inlier_sigma);
+      //}
+      // w += logpdf_normal(inlier_sigma, alpha_loc[6], alpha_scale[6]);
     }
     out_0 = coefficients[0];
     out_1 = coefficients[1];
@@ -239,6 +248,7 @@ export const computeShader = /* glsl */ `#version 300 es
     out_3 = periodic_parameters[0];
     out_4 = periodic_parameters[1];
     out_5 = periodic_parameters[2];
+    //out_6 = inlier_sigma;
     out_weight = w;
     out_p_outlier = p_outlier;
     out_outliers = float(outlier_bits);
