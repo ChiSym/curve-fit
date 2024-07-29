@@ -81,7 +81,7 @@ class RunningStats {
 const initialAlpha = () => params.map((p) => Object.assign({}, p.initialValue))
 
 function main(): void {
-  const stats = Array.from({ length: MODEL_SIZE }, () => new RunningStats())
+  const stats = params.map(() => new RunningStats());
   const modelEnable = new Map()
   const inferenceParameters: InferenceParameters = {
     numParticles: 0,
@@ -155,7 +155,7 @@ function main(): void {
   const maxSamplesPerParticle = 100_000
   // XXX: could get the above two constants by looking at the HTML,
   // but we really should learn to use a framework at some point
-  const gpu = new GPGPU_Inference(maxSamplesPerParticle)
+  const gpu = new GPGPU_Inference(params.length, maxSamplesPerParticle)
   const renderer = new Render()
 
   let pointEvictionIndex = 0

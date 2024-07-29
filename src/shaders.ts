@@ -169,10 +169,10 @@ export const computeShader = /* glsl */ `#version 300 es
   out float out_3;
   out float out_4;
   out float out_5;
-//  out float out_6;
   out float out_weight;
   out float out_p_outlier;
   out float out_outliers;
+  out float out_inlier_sigma;
 
   vec3 sample_alpha(inout uvec3 seed) {
     if ((component_enable & 1u) != 0u) {
@@ -248,10 +248,10 @@ export const computeShader = /* glsl */ `#version 300 es
     out_3 = periodic_parameters[0];
     out_4 = periodic_parameters[1];
     out_5 = periodic_parameters[2];
-    //out_6 = inlier_sigma;
     out_weight = w;
     out_p_outlier = p_outlier;
     out_outliers = float(outlier_bits);
+    out_inlier_sigma = inlier_sigma;
   }
 
 

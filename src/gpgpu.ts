@@ -35,10 +35,10 @@ export class GPGPU_Inference {
     "out_3",
     "out_4",
     "out_5",
-//    "out_6",
     "out_weight",
     "out_p_outlier",
     "out_outliers",
+    "out_inlier_sigma",
   ]
   private readonly gl: WebGL2RenderingContext
   private readonly program: WebGLProgram
@@ -61,7 +61,7 @@ export class GPGPU_Inference {
   private readonly bigArray: Float32Array
   private readonly bigBuf: WebGLBuffer
 
-  constructor(maxTrials: number) {
+  constructor(modelSize: number, maxTrials: number) {
     const w = 2
     const h = 10
     const canvas = document.createElement("canvas")
