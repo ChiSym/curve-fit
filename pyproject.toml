@@ -14,7 +14,7 @@ python = ">=3.10, <3.13"
 genjax = { version = "0.5.0.post31.dev0+e828327f", source = "gcp" }
 genstudio = {version = "2024.7.24.1802", source = "gcp"}
 # genstudio = {path = "../gen-studio", develop = true}
-jax = { version="^0.4.24", extras = ["cpu"] }
+jax = { version="^0.4.24" }
 
 [tool.poetry-dynamic-versioning]
 enable = true
