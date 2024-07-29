@@ -482,31 +482,32 @@ description = "Python AST that abstracts the underlying Python version"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,>=2.7"
 files = [
+    {file = "gast-0.6.0-py3-none-any.whl", hash = "sha256:52b182313f7330389f72b069ba00f174cfe2a06411099547288839c6cbafbd54"},
     {file = "gast-0.6.0.tar.gz", hash = "sha256:88fc5300d32c7ac6ca7b515310862f71e6fdf2c029bbec7c66c0f5dd47b6b1fb"},
 ]
 
 [[package]]
 name = "genjax"
-version = "0.5.0.post30.dev0+2df4f579"
+version = "0.5.0.post31.dev0+e828327f"
 description = "Probabilistic programming with Gen, built on top of JAX."
 optional = false
 python-versions = ">=3.10,<3.13"
 files = [
-    {file = "genjax-0.5.0.post30.dev0+2df4f579-py3-none-any.whl", hash = "sha256:d34589d12278343d0066263789c9584077fc79d50d4096781e62cb205acfe757"},
-    {file = "genjax-0.5.0.post30.dev0+2df4f579.tar.gz", hash = "sha256:495f5aae0be9ef3a68b6ad483a6472a00cf6bf1f9d366ed747d9313d489a9055"},
+    {file = "genjax-0.5.0.post31.dev0+e828327f-py3-none-any.whl", hash = "sha256:f6040519434f0c1be36d4f18b8b57b7a18ac85d0a746a69b78b9b6df5da172c8"},
+    {file = "genjax-0.5.0.post31.dev0+e828327f.tar.gz", hash = "sha256:3c10aa36b5ed87c918e09f22a0336552a5ae5b557b68e0f8e3e2d99a4d0a6555"},
 ]
 
 [package.dependencies]
 beartype = ">=0.18.5,<0.19.0"
 deprecated = ">=1.2.14,<2.0.0"
-jax = ">=0.4.28,<0.5.0"
+jax = ">=0.4.24,<0.5.0"
 jaxtyping = ">=0.2.28,<0.3.0"
 penzai = ">=0.1.1,<0.2.0"
 tensorflow-probability = ">=0.23.0,<0.24.0"
 
 [package.extras]
-all = ["genstudio (==2024.06.07.0931.49)", "msgpack (>=1.0.8,<2.0.0)"]
-genstudio = ["genstudio (==2024.06.07.0931.49)"]
+all = ["genstudio (==2024.07.29.1900)", "msgpack (>=1.0.8,<2.0.0)"]
+genstudio = ["genstudio (==2024.07.29.1900)"]
 msgpack = ["msgpack (>=1.0.8,<2.0.0)"]
 
 [package.source]
@@ -2137,4 +2138,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10, <3.13"
-content-hash = "502049548128a2c4848deef976a5fda84f7ec08f9b52a8aebef6ca632c1a1937"
+content-hash = "76108cfa8ac5b719976a7e6d1eca8c79a70d812dbba39ac0334f41bc14ec39e3"
