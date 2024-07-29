@@ -32,21 +32,89 @@ if "google.colab" in sys.modules:
 # %% [markdown]
 # # Curve fitting via distributions and inference
 #
-# blah text
+# This tutorial presents an introduction to solving problems using distributions and inference, working with the example of fitting curves to data.
+#
+# [Comment on Colin's abstractions on top of GenJAX?]
+
+# %%
+import genjax
+from genjax import ChoiceMapBuilder as C
+from genjax.typing import PRNGKey, FloatArray, ArrayLike
+import genjax_blocks as b
+import genstudio.plot as Plot
+import jax
+import jax.numpy as jnp
+import penzai.pz as pz
 
 # %% [markdown]
-# ## Distributions over curves
+# ## Distributions
 #
-# Distrubtions on numbers/params
+# Probability distributions are a mathematical construct used to express uncertain quantities.
 #
-# "Basic" distrubtions on curves
-#
-# Combinators on curve distributions
-#
-# Viz
+# We will represent them as code objects that generate possible values for these quantities according to how likely they are.
 
 # %% [markdown]
-# ## The difficulty of trying to fit curves to data
+# ### Distributions over numbers
+#
+# When the uncertain quantities are numbers, there are many standard examples (will use here: normal, uniform, beta).  Note that these are code objects...
+
+# %%
+u = genjax.uniform(0.0, 1.0)
+u
+
+# %% [markdown]
+# ...which can be queried for samples:
+
+# %%
+# Colin: how to brush randomness under the rug?
+key = jax.random.PRNGKey(8327)
+key, subkey = jax.random.split(key)
+
+u.simulate(key=subkey, args=()).get_retval()
+
+# %% [markdown]
+# The relative frequencies of their samples can be pictured through their *density functions*.
+
+# %%
+# make a plot
+# ... can't we just monadically thread the random key somehow?
+
+# %% [markdown]
+# ### Distributions over curves
+#
+# The uncertain quantity expressed by a distribution can be any kind of mathematical gadget.  Our primary example will be distributions over curves, that is, graphs functions $f(x)$.  Here are some basic examples.
+#
+# First example: curves of the form $f(x) = a e^{b x}$, where $a$ and $b$ each vary through some given distributions.
+
+# %%
+# Make an Exponential object and graph samples from it.
+
+# Make another Exponential object with different param distributions, and ditto.
+
+# %% [markdown]
+# Similarly for sinusoidal functions $f(x) = a \sin(\varphi + 2\pi x/T)$.
+
+# %%
+# Ditto for Periodic.
+
+# %% [markdown]
+# Similarly for polynomial for a *fixed max degree*, and the same distribution across all the coeffs.
+
+# %%
+# ...
+
+# %% [markdown]
+# ### Combining distributions over curves
+#
+# We can combine distributions over curves to take new ones.
+#
+# A sample from the pointwise sum, pointwise product, or composite of two distributions over curves... is the pointwise sum, pointwise product, or composite of independent sample curves from the respective distributions.
+
+# %%
+# Sum, product, composite examples
+
+# %% [markdown]
+# ## Trying to fit curves to data
 #
 # The idea of only an approximate fit
 #
