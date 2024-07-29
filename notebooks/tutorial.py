@@ -1,11 +1,13 @@
+# -*- coding: utf-8 -*-
 # ---
 # jupyter:
 #   jupytext:
+#     custom_cell_magics: kql
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.3
+#       jupytext_version: 1.11.2
 #   kernelspec:
 #     display_name: genjax-RWVhKTPb-py3.12
 #     language: python
@@ -27,6 +29,46 @@ if "google.colab" in sys.modules:
     #
     # Make sure that the string in brackets below is either `cuda12` (for GPU), `cpu` or `tpu`:
     # %pip install --quiet jax[cpu]==0.4.28  # type: ignore # noqa
+# %% [markdown]
+# # Curve fitting via distributions and inference
+#
+# blah text
+
+# %% [markdown]
+# ## Distributions over curves
+#
+# Distrubtions on numbers/params
+#
+# "Basic" distrubtions on curves
+#
+# Combinators on curve distributions
+#
+# Viz
+
+# %% [markdown]
+# ## The difficulty of trying to fit curves to data
+#
+# The idea of only an approximate fit
+#
+# Stretch goal: traditional regression —> need for outliers
+#
+# Outlier model
+#
+# Redefinition of "fitting": Conditioning = generating data consistent with observations
+
+# %% [markdown]
+# ## Inference 1: needle in haystack
+#
+# First generate plausible but probabilistically skewed data, then correct them by resampling.
+#
+# ^^^Gives an approximate algorithm.  In general, exact inference is hard-to-impossible, and better approxiamations require more compute; herein lies the ProbProgrammer's design space.
+
+# %% [markdown]
+# ## Inference 2: improving our guesses
+#
+# Gaussian drift
+#
+
 # %% [markdown]
 # # DSL for curve fit inference
 #
