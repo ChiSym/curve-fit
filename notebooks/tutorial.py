@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # ---
 # jupyter:
 #   jupytext:
@@ -116,26 +115,72 @@ u.simulate(key=subkey, args=()).get_retval()
 # %% [markdown]
 # ## Trying to fit curves to data
 #
-# The idea of only an approximate fit
+# The problem is widely familiar: from algebra on up, students fit curves to data by backsolving for the coefficients.
 #
-# Stretch goal: traditional regression —> need for outliers
+# We are going to work in a context where the fit is not exact, only approximate.  Maybe there does not exist an exact fit, such as an overdetermined system.  Or there is one, and finding it exactly is computationally out of reach.  Or we can find one, possibly many fits, but they are all rather unlikely or wackly, like an extremely high-degree polynomial.
 #
-# Outlier model
+# In a way, only expecting an approximate fit is a simplifying relaxation of the problem.
+
+# %% [markdown]
+# ### Classic technique: linear regression
 #
-# Redefinition of "fitting": Conditioning = generating data consistent with observations
+# A system of linear equations is encoded in a single package $\vec y = M \vec x$ for a matrix $M$ and vector variables $\vec x, \vec y$.  Given $\vec y$, this equation may or may not be solvable.  The techinque of *linear regression* produces the unique $\vec x$ that minimizes the distance $\|\vec y - M \vec x\|$, and in this sense gives the best approximating $\vec x$ to a solution.  [We want it to be overdetermined.]
+
+# %%
+# Example
+
+# %% [markdown]
+# Sometimes linear regression may be hijacked to solve other problems.  For instance, suppose we wanted to fit a polynomial curve to some data.  We fix the degree $d$, and then the points to fit $(x_i,y_i)$ for $i=1,\ldots,n$ give rise to equations $\vec y = M \vec a$ where $M$ is derived from the powers $1,x,x^2,\ldots,x^d$ and the quantity $\vec a$ to be optimized holds the *coefficients* of the varying polynomial curve.
+
+# %%
+# Example
+
+# %% [markdown]
+# The reader is invited to struggle with adapting this technique to fitting sinusoidal curves to data!
+
+# %% [markdown]
+# ### Outliers
+#
+# Linear regression suffers from sensitivity to outliers in the data:
+
+# %%
+# Example
+
+# %% [markdown]
+# We can form an intuition about curves that produce noisy data to begin with, including certain outliers.
+#
+# This intuition can be simply codified into a more sophisticated distribution, which we can then operate on.
+
+# %%
+# Data model
+# Inputs: a distribution on curves, and a noise/outlier model
+
+# %% [markdown]
+# Along the way, get a reasonable notion of how good a fit is (density in the data model).
+#
+# Redefinition of "fitting": find instances of the data model that are good fits.
+#
+# Bigger picture: Conditioning = generating data consistent with observations in a precise sense.  Inference = implementing conditioning.
+#
+# In general, exact inference is hard-to-impossible, and better approxiamations require more compute; herein lies the ProbProgrammer's design space.
 
 # %% [markdown]
 # ## Inference 1: needle in haystack
 #
-# First generate plausible but probabilistically skewed data, then correct them by resampling.
+# First generate plausible but probabilistically skewed data, then must correct them by resampling.
 #
-# ^^^Gives an approximate algorithm.  In general, exact inference is hard-to-impossible, and better approxiamations require more compute; herein lies the ProbProgrammer's design space.
+# One might ask why not just take the single best fit.  Many reasons, starting with multi-modality, and eventually "seeing" the whole space of answers.
+
+# %%
+# Importance sampling examples
 
 # %% [markdown]
 # ## Inference 2: improving our guesses
 #
+# We can do much better by exploiting the known structure of the problem.  Starting from a decent guess, we can explore nearby it for better fits.
+
+# %%
 # Gaussian drift
-#
 
 # %% [markdown]
 # # DSL for curve fit inference
