@@ -139,7 +139,8 @@ float logpdf_normal(float v, float loc, float scale) {
 }
 `
 
-export const computeShader = /* glsl */ `#version 300 es
+export function computeShader(nParameters: number): string {
+  return /* glsl */ `#version 300 es
   ${pcg3d}
   ${beta}
   ${randomUniform}
@@ -157,8 +158,8 @@ export const computeShader = /* glsl */ `#version 300 es
   #define M_PI 3.1415926535897932384626433832795
 
   uniform vec2 points[N_POINTS];
-  uniform float alpha_loc[6];
-  uniform float alpha_scale[6];
+  uniform float alpha_loc[${nParameters}-1];
+  uniform float alpha_scale[${nParameters}-1];
   uniform uint component_enable;
 
   in uvec3 seed;
@@ -169,6 +170,7 @@ export const computeShader = /* glsl */ `#version 300 es
   out float out_3;
   out float out_4;
   out float out_5;
+  out float out_6;
   out float out_weight;
   out float out_p_outlier;
   out float out_outliers;
@@ -248,6 +250,7 @@ export const computeShader = /* glsl */ `#version 300 es
     out_3 = periodic_parameters[0];
     out_4 = periodic_parameters[1];
     out_5 = periodic_parameters[2];
+    out_6 = inlier_sigma;
     out_weight = w;
     out_p_outlier = p_outlier;
     out_outliers = float(outlier_bits);
@@ -259,4 +262,5 @@ export const computeShader = /* glsl */ `#version 300 es
     uvec3 seed = pcg3d(seed);
     curve_fit_importance(seed);
   }
-`
+`;
+}

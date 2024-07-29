@@ -156,7 +156,7 @@ function main(): void {
   // XXX: could get the above two constants by looking at the HTML,
   // but we really should learn to use a framework at some point
   const gpu = new GPGPU_Inference(params.length, maxSamplesPerParticle)
-  const renderer = new Render()
+  const renderer = new Render(params.length)
 
   let pointEvictionIndex = 0
   renderer.canvas.addEventListener("click", (event) => {

@@ -9,5 +9,3 @@ export interface Model {
   weight: number
   p_outlier: number
 }
-
-export const MODEL_SIZE = 6

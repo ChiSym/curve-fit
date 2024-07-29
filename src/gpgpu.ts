@@ -1,4 +1,4 @@
-import { MODEL_SIZE, type Model, type Normal } from "./model"
+import { type Model, type Normal } from "./model"
 import { computeShader } from "./shaders"
 import { WGL2Helper } from "./webgl"
 
@@ -35,6 +35,7 @@ export class GPGPU_Inference {
     "out_3",
     "out_4",
     "out_5",
+    "out_6",
     "out_weight",
     "out_p_outlier",
     "out_outliers",
@@ -51,17 +52,18 @@ export class GPGPU_Inference {
   private readonly seedBuf: WebGLBuffer
   private readonly tf: WebGLTransformFeedback
   private readonly max_trials: number
+  private readonly nParameters: number
   private readonly floatsPerSeed: number
   private readonly seeds: Uint32Array
   private readonly weight: Float32Array
-  private readonly model: Float32Array
+  private readonly parameters: Float32Array
   private readonly p_outlier: Float32Array
   private readonly outlier: Uint32Array
 
   private readonly bigArray: Float32Array
   private readonly bigBuf: WebGLBuffer
 
-  constructor(modelSize: number, maxTrials: number) {
+  constructor(nParameters: number, maxTrials: number) {
     const w = 2
     const h = 10
     const canvas = document.createElement("canvas")
@@ -79,7 +81,7 @@ export class GPGPU_Inference {
     this.vao = wgl.createVertexArray()
 
     const program = wgl.createProgram(
-      computeShader,
+      computeShader(nParameters),
       computeFragmentShader,
       GPGPU_Inference.TF_BUFFER_NAMES,
     )
@@ -105,10 +107,11 @@ export class GPGPU_Inference {
     }
 
     this.max_trials = maxTrials
+    this.nParameters = nParameters
     this.seeds = new Uint32Array(maxTrials * GPGPU_Inference.UINTS_PER_SEED)
     // preallocate buffers to receive results of GPU computation
     this.weight = new Float32Array(this.max_trials)
-    this.model = new Float32Array(this.max_trials * MODEL_SIZE)
+    this.parameters = new Float32Array(this.max_trials * nParameters)
     this.p_outlier = new Float32Array(this.max_trials)
     this.outlier = new Uint32Array(this.max_trials)
     this.seedBuf = makeBufferAndSetAttribute(this.seeds, this.seedLoc)
@@ -166,7 +169,6 @@ export class GPGPU_Inference {
       0,
       N * GPGPU_Inference.UINTS_PER_SEED,
     )
-    //console.log(this.seedBuf)
 
     // points is a list: [[x1, y1], ...]
     // to send to the GPU, we flatten it: [x1, y1, x2, ...]
@@ -207,20 +209,19 @@ export class GPGPU_Inference {
       0,
       N * this.floatsPerSeed,
     )
-    console.log('bigarray', this.bigArray.subarray(0, 100))
     const a = this.bigArray
     for (let i = 0, p = 0; i < N; ++i, p += this.floatsPerSeed) {
-      const m_i = i * MODEL_SIZE
-      this.model.set(a.subarray(p, p + MODEL_SIZE), m_i)
-      this.weight[i] = a[p + MODEL_SIZE]
-      this.p_outlier[i] = a[p + MODEL_SIZE + 1]
-      this.outlier[i] = a[p + MODEL_SIZE + 2]
+      const m_i = i * this.nParameters
+      this.parameters.set(a.subarray(p, p + this.nParameters), m_i)
+      this.weight[i] = a[p + this.nParameters]
+      this.p_outlier[i] = a[p + this.nParameters + 1]
+      this.outlier[i] = a[p + this.nParameters + 2]
     }
     // TODO: unbind
 
     // INSPECT RESULTS
     return {
-      model: this.model.subarray(0, N * this.floatsPerSeed),
+      model: this.parameters.subarray(0, N * this.floatsPerSeed),
       p_outlier: this.p_outlier.subarray(0, N),
       outlier: this.outlier.subarray(0, N),
       weight: this.weight.subarray(0, N),
@@ -252,8 +253,6 @@ export class GPGPU_Inference {
         modelParameters,
         inferenceParameters,
       )
-      //console.log(results)
-      // now we need to look through the logit-indexed results table
       const weights = results.weight
       this.normalize(weights)
       const z = Math.random()
@@ -267,8 +266,8 @@ export class GPGPU_Inference {
       if (targetIndex < weights.length) {
         selectedModels[modelIndex++] = {
           model: results.model.slice(
-            targetIndex * MODEL_SIZE,
-            targetIndex * MODEL_SIZE + MODEL_SIZE,
+            targetIndex * this.nParameters,
+            targetIndex * this.nParameters + this.nParameters,
           ),
           outlier: results.outlier[targetIndex],
           p_outlier: results.p_outlier[targetIndex],
