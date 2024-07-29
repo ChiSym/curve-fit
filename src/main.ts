@@ -37,7 +37,7 @@ const params = [
   { name: "omega", initialValue: { mu: 0, sigma: 2 } },
   { name: "A", initialValue: { mu: 0, sigma: 2 } },
   { name: "phi", initialValue: { mu: 0, sigma: 2 } },
-  { name: "inlier", initialValue: { mu: 0.3, sigma: 0.1 } }, // TODO: change to uniform
+  { name: "inlier", initialValue: { mu: 0.3, sigma: 0.07 } }, // TODO: change to uniform
 ]
 
 const model_components = ["polynomial", "periodic"]
@@ -81,7 +81,7 @@ class RunningStats {
 const initialAlpha = () => params.map((p) => Object.assign({}, p.initialValue))
 
 function main(): void {
-  const stats = params.map(() => new RunningStats());
+  const stats = params.map(() => new RunningStats())
   const modelEnable = new Map()
   const inferenceParameters: InferenceParameters = {
     numParticles: 0,
@@ -202,7 +202,8 @@ function main(): void {
       pause.checked = false
     })
 
-  const emptyPosterior = document.querySelector<HTMLSpanElement>("#empty-posterior")!
+  const emptyPosterior =
+    document.querySelector<HTMLSpanElement>("#empty-posterior")!
   const pause = document.querySelector<HTMLInputElement>("#pause")!
 
   // render math

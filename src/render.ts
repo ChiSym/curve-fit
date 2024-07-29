@@ -161,5 +161,5 @@ function renderShader(modelSize: number): string {
       }
     }
   }
-  `;
+  `
 }

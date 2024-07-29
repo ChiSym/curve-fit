@@ -230,7 +230,7 @@ export class GPGPU_Inference {
 
   private logsumexp(a: Float32Array): number {
     let sumExp = 0.0
-    a.forEach(v => sumExp += Math.exp(v))
+    a.forEach((v) => (sumExp += Math.exp(v)))
     return Math.log(sumExp)
   }
 
@@ -291,7 +291,7 @@ export class GPGPU_Inference {
     return {
       selectedModels: selectedModels.slice(0, modelIndex),
       ips,
-      failedSamples
+      failedSamples,
     }
   }
 

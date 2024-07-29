@@ -158,8 +158,8 @@ export function computeShader(nParameters: number): string {
   #define M_PI 3.1415926535897932384626433832795
 
   uniform vec2 points[N_POINTS];
-  uniform float alpha_loc[${nParameters}-1];
-  uniform float alpha_scale[${nParameters}-1];
+  uniform float alpha_loc[${nParameters}];
+  uniform float alpha_scale[${nParameters}];
   uniform uint component_enable;
 
   in uvec3 seed;
@@ -262,5 +262,5 @@ export function computeShader(nParameters: number): string {
     uvec3 seed = pcg3d(seed);
     curve_fit_importance(seed);
   }
-`;
+`
 }
