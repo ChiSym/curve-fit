@@ -488,13 +488,13 @@ files = [
 
 [[package]]
 name = "genjax"
-version = "0.5.0.post31.dev0+e828327f"
+version = "0.5.1"
 description = "Probabilistic programming with Gen, built on top of JAX."
 optional = false
 python-versions = ">=3.10,<3.13"
 files = [
-    {file = "genjax-0.5.0.post31.dev0+e828327f-py3-none-any.whl", hash = "sha256:f6040519434f0c1be36d4f18b8b57b7a18ac85d0a746a69b78b9b6df5da172c8"},
-    {file = "genjax-0.5.0.post31.dev0+e828327f.tar.gz", hash = "sha256:3c10aa36b5ed87c918e09f22a0336552a5ae5b557b68e0f8e3e2d99a4d0a6555"},
+    {file = "genjax-0.5.1-py3-none-any.whl", hash = "sha256:1ad4363ce44f64cc1e5d92f826f4c7c14e99370a8c86d39cbe6fa8c3b6a657ce"},
+    {file = "genjax-0.5.1.tar.gz", hash = "sha256:cd954c497be1e663589ab7bc6e498d2c3d5f2dbb293ecc0da7f11085888eeaed"},
 ]
 
 [package.dependencies]
@@ -517,19 +517,20 @@ reference = "gcp"
 
 [[package]]
 name = "genstudio"
-version = "2024.7.29.2053"
+version = "2024.7.29.2335"
 description = ""
 optional = false
 python-versions = ">=3.10,<3.13"
 files = [
-    {file = "genstudio-2024.7.29.2053-py3-none-any.whl", hash = "sha256:7f710059219947e15d3ca901622b28a00d5acc029a87273a8d0694b21fb458f0"},
-    {file = "genstudio-2024.7.29.2053.tar.gz", hash = "sha256:4d7c0a3a6641c6a76afa72dbb30cfd59986ea7e2eab29cd2d86c2d40ec628a47"},
+    {file = "genstudio-2024.7.29.2335-py3-none-any.whl", hash = "sha256:720d76d14af58e128a68f0bddf675e4604741a07c3ca02e658636e5b8a8d54e0"},
+    {file = "genstudio-2024.7.29.2335.tar.gz", hash = "sha256:c7ddb15e94655cec26c84d1c62505513a695d2b154edbee2434101c0f21f868b"},
 ]
 
 [package.dependencies]
 anywidget = ">=0.9.10,<0.10.0"
 html2image = ">=2.0.4.3,<3.0.0.0"
-jax = ">=0.4.24,<0.5.0"
+jax = ">=0.4.25,<0.5.0"
+jaxlib = ">=0.4.28,<0.5.0"
 numpy = ">=1.26.4,<2.0.0"
 orjson = ">=3.10.6,<4.0.0"
 penzai = ">=0.1.1,<0.2.0"
@@ -2198,4 +2199,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10, <3.13"
-content-hash = "1518f26fb8d0007160faf47a0206bf07cbccf87fc708a910bf455bd91096a630"
+content-hash = "af5c1b35a9cf31951de71a245ea4f9276c4292852d944a107a92ba62b54a9666"
