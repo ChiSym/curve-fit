@@ -12,7 +12,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = ">=3.10, <3.13"
 genjax = { version = "0.5.1", source = "gcp" }
-genstudio = {version = "2024.07.29.2335", source = "gcp"}
+genstudio = {version = "2024.7.30.1617", source = "gcp"}
 # genstudio = {path = "../gen-studio", develop = true}
 jax = { version="^0.4.24" }
 
