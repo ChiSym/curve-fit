@@ -55,20 +55,14 @@ import penzai.pz as pz
 # %% [markdown]
 # ### Distributions over numbers
 #
-# When the uncertain quantities are numbers, there are many standard examples (will use here: normal, uniform, beta).  Note that these are code objects...
+# When the uncertain quantities are numbers, there are many standard examples (will use here: normal, uniform, beta).  Note that these are code objects that can be queried for samples.
 
 # %%
 u = genjax.uniform(0.0, 1.0)
-u
 
-# %% [markdown]
-# ...which can be queried for samples:
-
-# %%
-# Colin: how to brush randomness under the rug?
+# Colin: how to brush randomness under the rug?  wishing for u.sample()
 key = jax.random.PRNGKey(8327)
 key, subkey = jax.random.split(key)
-
 u.simulate(key=subkey, args=()).get_retval()
 
 # %% [markdown]
@@ -83,84 +77,113 @@ u.simulate(key=subkey, args=()).get_retval()
 #
 # The uncertain quantity expressed by a distribution can be any kind of mathematical gadget.  Our primary example will be distributions over curves, that is, graphs functions $f(x)$.  Here are some basic examples.
 #
-# First example: curves of the form $f(x) = a e^{b x}$, where $a$ and $b$ each vary through some given distributions.
+# First example: curves of the form $f(x) = a e^{b x}$, where $a$ and $b$ *each vary through their own given distributions*.
 
 # %%
-# Make an Exponential object and graph samples from it.
+exponential = b.Exponential(a=genjax.normal(0.0, 1.0), b=genjax.normal(0.0, 1.0))
 
-# Make another Exponential object with different param distributions, and ditto.
+exponential2 = b.Exponential(a=genjax.normal(1.0,0.1), b = genjax.normal(1.0, 0.1))
+
+# plot some samples...
 
 # %% [markdown]
 # Similarly for sinusoidal functions $f(x) = a \sin(2\pi (x - \varphi)/T)$.
 
 # %%
-# Ditto for Periodic.
+periodic = b.Periodic(
+    amplitude=genjax.beta(2.0, 5.0),
+    phase=genjax.uniform(0.0, 1.0),
+    period=genjax.normal(1.0, 1.0),
+)
+
+# plot...
+
 
 # %% [markdown]
 # Similarly for polynomial for a *fixed max degree*, and the same distribution across all the coeffs.
 
 # %%
-# ...
+# Colin: do we care that quadratic has a different coeff std.dev.?
+linear = b.Polynomial(max_degree=1, coefficient_d=genjax.normal(0.0, 2.0))
+quadratic = b.Polynomial(max_degree=2, coefficient_d=genjax.normal(0.0, 1.0))
+cubic = b.Polynomial(max_degree=3, coefficient_d=genjax.normal(0.0, 2.0))
+
+# plot...
 
 # %% [markdown]
 # ### Combining distributions over curves
 #
 # We can combine distributions over curves to take new ones.
 #
-# A sample from the pointwise sum, pointwise product, or composite of two distributions over curves... is the pointwise sum, pointwise product, or composite of independent sample curves from the respective distributions.
+# Operators `+` ("sum"), `*` ("product"), `@` ("composite") take two distributions over curves and produce a new one.  The new distribution first draws sample curves from the two operand distributions, then returns as its sample the curve whose function is the pointwise sum, pointwise product, or composite function of the two drawn curves.
 
 # %%
-# Sum, product, composite examples
+wiggly_arc = quadratic + periodic
+zap = exponential * (periodic @ exponential)
+
+# plot...
 
 # %% [markdown]
 # ## Trying to fit curves to data
 #
-# The problem is widely familiar: from algebra on up, students fit curves to data by backsolving for the coefficients.
+# The problem is widely familiar: from algebra on up, students fit curves to data by backsolving for the coefficients in a function.
 #
-# We are going to work in a context where the fit is not exact, only approximate.  Maybe there does not exist an exact fit, such as an overdetermined system.  Or there is one, and finding it exactly is computationally out of reach.  Or we can find one, possibly many fits, but they are all rather unlikely or wackly, like an extremely high-degree polynomial.
+# We are going to work in a context where the fit is not exact, only approximate.  Maybe there does not exist an exact fit, such as an overdetermined system.  Or there is one, and finding it exactly is computationally out of reach.  Or we can find one, possibly many fits, but they are all rather unlikely or wackly, like an extremely high-degree polynomial to approximate periodic data.
 #
-# In a way, only expecting an approximate fit is a simplifying relaxation of the problem.
+# In another light, only expecting an approximate fit is asking for something weaker, and is a simplifying relaxation of the problem.
 
 # %% [markdown]
-# ### Classic technique: linear regression
+# ### Classic technique: least squares
 #
-# A system of linear equations is encoded in a single package $\vec y = M \vec x$ for a matrix $M$ and vector variables $\vec x, \vec y$.  Given $\vec y$, this equation may or may not be solvable.  The techinque of *linear regression* produces the unique $\vec x$ that minimizes the distance $\|\vec y - M \vec x\|$, and in this sense gives the best approximating $\vec x$ to a solution.  [We want it to be overdetermined.]
+# Suppose we are trying to fit data $(\vec x_i,\vec y_i)$ for $i=1,\ldots,N$ where the $\vec x_i,\vec y_i$ are vectors, using a linear equation $\vec y = M \vec x + \vec b$ where $M$ is a matrix and $\vec b$ is a vector.  When $N$ is large and the system is overdetermined, how do we make sense of the situation?
+#
+# A common answer is to choose the $M$ and $\vec b$ that minimize the sum of the squared errors $\sum_{i=1}^N \|M\vec x_i + \vec b - \vec y_i\|^2$.  With a little elbow grease, this can be explicitly solved.
+
+# %%
+# Example: some points and a line
+jnp.linalg.lstsq
+
+# %% [markdown]
+# Sometimes least squares fitting may be hijacked to solve other problems.  For instance, suppose we wanted to fit a polynomial curve of fixed degree $d$ to some data $(x_i,y_i)$ for $i=1,\ldots,N$.  The right hand side of the desired equation $y = a_d x^d + a_{d-1} x^{d-1} + \cdots + a_1 x + a_0$ may be a polynomial in $x$, but it is a *linear function of the powers of $x$*.  Therefore we can perform least squares fitting on the data $(\vec x_i,y_i)$ where $\vec x_i$ is the vector of powers of $x_i$.
+
+# %%
+# Example: some points and a polynomial
+jnp.linalg.lstsq
+
+# %% [markdown]
+# ### Gradient descent via noisy curves
+#
+# The exact solution of least squares breaks down in the non-linear setting, however: the reader is invited to struggle with adapting it to fitting sinusoidal curves to data!  It is then common to approximately optimize the sum-squared error using *gradient descent*.
+#
+# We are going to set up gradient descent for sum-squared error in an equivalent but slightly nonstandard way.  The `NoisyCurve` object represents a distribution over datasets.  It takes in a curve $f(x)$ and a noise level $\sigma$.  When queried for an sample on the inputs $x_i$ for $i=1,\ldots,N$, it independently for each $i=1,\ldots,N$ draws a sample $y_i$ for the normal distribution centered at $f(x_i)$ with standard deviation $\sigma$.  The log density of this sample under this distribution is the sum of the corresponding log normal densities, which are in turn proportional to the squared errors $(f(x_i)-y_i)^2$.  Thus optimizing the log density of a dataset under this distribution *for varying curves* is equivalent to optimizing the sum-squared error.
+#
+# Using this model, we can extract the gradient as follows...
+
+# %%
+# Example
+# NoisyCurve object
+
+# %% [markdown]
+# ### The problem of outliers
+#
+# Blind optimization suffers from sensitivity to outliers in the data.
 
 # %%
 # Example
 
 # %% [markdown]
-# Sometimes linear regression may be hijacked to solve other problems.  For instance, suppose we wanted to fit a polynomial curve to some data.  We fix the degree $d$, and then the points to fit $(x_i,y_i)$ for $i=1,\ldots,n$ give rise to equations $\vec y = M \vec a$ where $M$ is derived from the powers $1,x,x^2,\ldots,x^d$ and the quantity $\vec a$ to be optimized holds the *coefficients* of the varying polynomial curve.
+# We can instead imagine curves that produce noisy data *including some outliers*.  This intuition can be simply codified into a more sophisticated distribution.
 
 # %%
 # Example
+# NoisyOutliersCurve object
 
 # %% [markdown]
-# The reader is invited to struggle with adapting this technique to fitting sinusoidal curves to data!
-
-# %% [markdown]
-# ### Outliers
-#
-# Linear regression suffers from sensitivity to outliers in the data:
-
-# %%
-# Example
-
-# %% [markdown]
-# We can form an intuition about curves that produce noisy data to begin with, including certain outliers.
-#
-# This intuition can be simply codified into a more sophisticated distribution, which we can then operate on.
-
-# %%
-# Data model
-# Inputs: a distribution on curves, and a noise/outlier model
-
-# %% [markdown]
-# Along the way, get a reasonable notion of how good a fit is (density in the data model).
-#
-# Redefinition of "fitting": find instances of the data model that are good fits.
+# We again get a reasonable notion of how good a fit is (density in the data model).
 #
 # Bigger picture: Conditioning = generating data consistent with observations in a precise sense.  Inference = implementing conditioning.
+#
+# How to do so in non-differentiable context?
 #
 # In general, exact inference is hard-to-impossible, and better approxiamations require more compute; herein lies the ProbProgrammer's design space.
 
