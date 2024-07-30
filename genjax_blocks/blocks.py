@@ -105,7 +105,7 @@ class Periodic(Block):
         period: FloatArray
 
         def __call__(self, x: ArrayLike) -> FloatArray:
-            return self.amplitude * jnp.sin(self.phase + 2 * x * math.pi / self.period)
+            return self.amplitude * jnp.sin(2 * (x - self.phase) * math.pi / self.period)
 
 
 class Exponential(Block):
