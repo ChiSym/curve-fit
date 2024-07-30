@@ -11,10 +11,10 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = ">=3.10, <3.13"
-genjax = { version = "0.5.0.post30.dev0+2df4f579", source = "gcp" }
-genstudio = {version = "2024.7.24.1802", source = "gcp"}
+genjax = { version = "0.5.1", source = "gcp" }
+genstudio = {version = "2024.7.30.1617", source = "gcp"}
 # genstudio = {path = "../gen-studio", develop = true}
-jax = { version="^0.4.28", extras = ["cpu"] }
+jax = { version="^0.4.24" }
 
 [tool.poetry-dynamic-versioning]
 enable = true
@@ -29,7 +29,7 @@ jupytext = "^1.16.2"
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-pythonVersion = "3.12.3"
+pythonVersion = "3.12"
 include = ["src", "notebooks"]
 
 

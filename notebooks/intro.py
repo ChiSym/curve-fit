@@ -17,16 +17,9 @@ import sys
 
 if "google.colab" in sys.modules:
     from google.colab import auth  # pyright: ignore [reportMissingImports]
-
     auth.authenticate_user()
-    # %pip install --quiet keyring keyrings.google-artifactregistry-auth  # type: ignore # noqa
-    # %pip install --quiet genjax==0.4.0.post4.dev0+9d775c6f genstudio==v2024.06.20.1130 genjax-blocks==0.1.0 --extra-index-url https://us-west1-python.pkg.dev/probcomp-caliban/probcomp/simple/  # type: ignore # noqa
-    # This example will work on GPU, CPU or TPU. To change your runtime,
-    # select "Change runtime type" from the dropdown on the top right
-    # of the colab page.
-    #
-    # Make sure that the string in brackets below is either `cuda12` (for GPU), `cpu` or `tpu`:
-    # %pip install --quiet jax[cpu]==0.4.28  # type: ignore # noqa
+    %pip install --quiet keyring keyrings.google-artifactregistry-auth  # type: ignore # noqa
+    %pip install --quiet genjax-blocks==0.1.0.post8.dev0+a289d26 --extra-index-url https://us-west1-python.pkg.dev/probcomp-caliban/probcomp/simple/  # type: ignore # noqa
 # %% [markdown]
 # # DSL for curve fit inference
 #
