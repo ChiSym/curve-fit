@@ -101,4 +101,8 @@ export class WGL2Helper {
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, buffer)
     this.gl.getBufferSubData(this.gl.ARRAY_BUFFER, 0, out)
   }
+
+  deleteBuffer(b: WebGLBuffer) {
+    this.gl.deleteBuffer(b)
+  }
 }

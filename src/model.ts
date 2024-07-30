@@ -6,6 +6,6 @@ export interface Normal {
 export interface Model {
   model: Float32Array
   outlier: number
-  weight: number
+  log_weight: number
   p_outlier: number
 }

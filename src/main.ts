@@ -170,6 +170,7 @@ function main(): void {
     if (++pointEvictionIndex >= points.length) {
       pointEvictionIndex = 0
     }
+    Reset()
   })
 
   function setSliderValues(values: Normal[]): void {
@@ -187,24 +188,29 @@ function main(): void {
     }
   }
 
+  function SIR_Update() {
+    setSliderValues(stats.map((s) => s.summarize(), [stats.keys()]))
+  }
+
   document
     .querySelector<HTMLButtonElement>("#sir")
-    ?.addEventListener("click", () => {
-      setSliderValues(stats.map((s) => s.summarize(), [stats.keys()]))
-    })
+    ?.addEventListener("click", SIR_Update)
+
+  function Reset() {
+    alpha = initialAlpha()
+    setSliderValues(alpha)
+    totalFailedSamples = 0
+    pause.checked = false
+  }
 
   document
     .querySelector<HTMLButtonElement>("#reset-priors")
-    ?.addEventListener("click", () => {
-      alpha = initialAlpha()
-      setSliderValues(alpha)
-      totalFailedSamples = 0
-      pause.checked = false
-    })
+    ?.addEventListener("click", Reset)
 
   const emptyPosterior =
     document.querySelector<HTMLSpanElement>("#empty-posterior")!
   const pause = document.querySelector<HTMLInputElement>("#pause")!
+  const autoSIR = document.querySelector<HTMLInputElement>("#auto-SIR")!
 
   // render math
   const mathElements = document.querySelectorAll<HTMLElement>(".katex")
@@ -267,8 +273,11 @@ function main(): void {
         // const ols = selected_models.map(m => m.p_outlier.toFixed(2).toString()).join(', ')
         // document.querySelector<HTMLSpanElement>('#p_outlier')!.innerText = ols
         renderer.render(points, result)
+        emptyPosterior.innerText = totalFailedSamples.toString()
+        if (autoSIR.checked) {
+          SIR_Update()
+        }
       }
-      emptyPosterior.innerText = totalFailedSamples.toString()
       requestAnimationFrame(frame)
     } catch (error) {
       log("error", error)

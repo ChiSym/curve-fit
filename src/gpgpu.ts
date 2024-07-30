@@ -1,5 +1,5 @@
 import { type Model, type Normal } from "./model"
-import { computeShader } from "./shaders"
+import { importanceShader } from "./shaders"
 import { WGL2Helper } from "./webgl"
 
 export interface ResultBatch {
@@ -36,13 +36,13 @@ export class GPGPU_Inference {
     "out_4",
     "out_5",
     "out_6",
-    "out_weight",
+    "out_log_weight",
     "out_p_outlier",
     "out_outliers",
     "out_inlier_sigma",
   ]
-  private readonly gl: WebGL2RenderingContext
-  private readonly program: WebGLProgram
+  private readonly wgl: WGL2Helper
+  private readonly importanceProgram: WebGLProgram
   private readonly pointsLoc: WebGLUniformLocation
   private readonly alphaLocLoc: WebGLUniformLocation
   private readonly alphaScaleLoc: WebGLUniformLocation
@@ -69,8 +69,8 @@ export class GPGPU_Inference {
     const canvas = document.createElement("canvas")
     canvas.width = w
     canvas.height = h
-    const wgl = new WGL2Helper(canvas)
-    const gl = wgl.gl
+    this.wgl = new WGL2Helper(canvas)
+    const gl = this.wgl.gl
 
     const computeFragmentShader = `#version 300 es
       precision highp float;
@@ -78,14 +78,14 @@ export class GPGPU_Inference {
       }
     `
 
-    this.vao = wgl.createVertexArray()
+    this.vao = this.wgl.createVertexArray()
 
-    const program = wgl.createProgram(
-      computeShader(nParameters),
+    this.importanceProgram = this.wgl.createProgram(
+      importanceShader(nParameters),
       computeFragmentShader,
       GPGPU_Inference.TF_BUFFER_NAMES,
     )
-    this.seedLoc = gl.getAttribLocation(program, "seed")
+    this.seedLoc = gl.getAttribLocation(this.importanceProgram, "seed")
     // Create a VAO for the attribute state
     gl.bindVertexArray(this.vao)
 
@@ -93,7 +93,7 @@ export class GPGPU_Inference {
       data: AllowSharedBufferSource,
       loc: number,
     ): WebGLBuffer => {
-      const buf = wgl.makeBuffer(data)
+      const buf = this.wgl.makeBuffer(data)
       if (buf == null) throw new Error("unable to create buffer")
       gl.enableVertexAttribArray(loc)
       gl.vertexAttribIPointer(
@@ -120,24 +120,44 @@ export class GPGPU_Inference {
 
     // The vertex arrays (above) are for the INPUT.
     // The transform feedback (below) is for the OUTPUT.
-    this.tf = wgl.createTransformFeedback()
+    this.tf = this.wgl.createTransformFeedback()
     gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, this.tf)
 
-    this.bigBuf = wgl.makeBuffer(maxTrials * 9 * 4) // UGH
-
+    this.bigBuf = this.wgl.makeBuffer(maxTrials * this.floatsPerSeed * Float32Array.BYTES_PER_ELEMENT)
     gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, this.bigBuf)
     gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null)
     gl.bindBuffer(gl.ARRAY_BUFFER, null)
 
-    this.pointsLoc = wgl.getUniformLocation(program, "points")
-    this.alphaLocLoc = wgl.getUniformLocation(program, "alpha_loc")
-    this.alphaScaleLoc = wgl.getUniformLocation(program, "alpha_scale")
-    this.componentEnableLoc = wgl.getUniformLocation(
-      program,
+    this.pointsLoc = this.wgl.getUniformLocation(this.importanceProgram, "points")
+    this.alphaLocLoc =  this.wgl.getUniformLocation(this.importanceProgram, "alpha_loc")
+    this.alphaScaleLoc = this.wgl.getUniformLocation(this.importanceProgram, "alpha_scale")
+    this.componentEnableLoc = this.wgl.getUniformLocation(
+      this.importanceProgram,
       "component_enable",
     )
-    this.gl = gl
-    this.program = program
+  }
+
+  private sendParameters(parameters: ModelParameters) {
+    const gl = this.wgl.gl
+    // points is a list: [[x1, y1], ...]
+    // to send to the GPU, we flatten it: [x1, y1, x2, ...]
+
+    gl.uniform2fv(this.pointsLoc, parameters.points.flat())
+
+    gl.uniform1fv(
+      this.alphaLocLoc,
+      parameters.coefficients.map((c) => c.mu),
+    )
+    gl.uniform1fv(
+      this.alphaScaleLoc,
+      parameters.coefficients.map((c) => c.sigma),
+    )
+
+    let enableBits = 0
+    if (parameters.component_enable.get("polynomial")) enableBits |= 1
+    if (parameters.component_enable.get("periodic")) enableBits |= 2
+
+    gl.uniform1ui(this.componentEnableLoc, enableBits)
   }
 
   // Runs the compute shader and retrieves the result of the computation.
@@ -149,8 +169,8 @@ export class GPGPU_Inference {
   ): ResultBatch {
     // DO THE COMPUTE PART
     const N = inferenceParameters.importanceSamplesPerParticle
-    const gl = this.gl
-    gl.useProgram(this.program)
+    const gl = this.wgl.gl
+    gl.useProgram(this.importanceProgram)
 
     // One GPU thread will be created for each _vertex_ in the array `seed`.
     // Each vertex is UINTS_PER_SEED unsigned 32 bit integers. The PRNG used
@@ -170,24 +190,7 @@ export class GPGPU_Inference {
       N * GPGPU_Inference.UINTS_PER_SEED,
     )
 
-    // points is a list: [[x1, y1], ...]
-    // to send to the GPU, we flatten it: [x1, y1, x2, ...]
-    gl.uniform2fv(this.pointsLoc, parameters.points.flat())
-
-    gl.uniform1fv(
-      this.alphaLocLoc,
-      parameters.coefficients.map((c) => c.mu),
-    )
-    gl.uniform1fv(
-      this.alphaScaleLoc,
-      parameters.coefficients.map((c) => c.sigma),
-    )
-
-    let enableBits = 0
-    if (parameters.component_enable.get("polynomial")) enableBits |= 1
-    if (parameters.component_enable.get("periodic")) enableBits |= 2
-
-    gl.uniform1ui(this.componentEnableLoc, enableBits)
+    this.sendParameters(parameters)
 
     gl.bindVertexArray(this.vao)
     gl.enable(gl.RASTERIZER_DISCARD)
@@ -271,7 +274,7 @@ export class GPGPU_Inference {
           ),
           outlier: results.outlier[targetIndex],
           p_outlier: results.p_outlier[targetIndex],
-          weight: results.weight[targetIndex],
+          log_weight: results.weight[targetIndex],
         }
       } else {
         // log('info', `oddly enough, the weights table ran out of probability for ${z} : ${accumulated_prob}`)
@@ -295,8 +298,48 @@ export class GPGPU_Inference {
     }
   }
 
+  private drift(models: Model[], mParams: ModelParameters, driftScale: number) {
+    // prototype of drift in JS before shader implementation
+
+    function random_normal() {
+      const u1 = 1 - Math.random()
+      const u2 = Math.random()
+      const mag = Math.sqrt(-2 * Math.log(u1))
+      return mag * Math.cos(2 * Math.PI * u2)
+    }
+
+    function evaluate(coefficients: Float32Array, x: number) {
+      const y_poly = coefficients[0] + x * coefficients[1] + x*x*coefficients[2];
+      const y_periodic = coefficients[4] + Math.sin(coefficients[5] + coefficients[3] * x);
+      return y_poly + y_periodic
+    }
+
+    const xs = mParams.points.map(p => p[0])
+
+    for (const m of models) {
+      const parameters = m.model
+      const drifted = parameters.map(v => v + driftScale * random_normal())
+      const drifted_ys = xs.map(x => evaluate(drifted, x))
+
+
+
+
+
+
+
+
+
+
+
+
+
+    }
+
+
+  }
+
   cleanup(): void {
-    this.gl.deleteBuffer(this.seedBuf)
-    this.gl.deleteBuffer(this.bigBuf)
+    this.wgl.deleteBuffer(this.seedBuf)
+    this.wgl.deleteBuffer(this.bigBuf)
   }
 }
