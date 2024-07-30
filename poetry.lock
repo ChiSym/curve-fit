@@ -517,20 +517,19 @@ reference = "gcp"
 
 [[package]]
 name = "genstudio"
-version = "2024.7.29.2335"
+version = "2024.7.30.1617"
 description = ""
 optional = false
 python-versions = ">=3.10,<3.13"
 files = [
-    {file = "genstudio-2024.7.29.2335-py3-none-any.whl", hash = "sha256:720d76d14af58e128a68f0bddf675e4604741a07c3ca02e658636e5b8a8d54e0"},
-    {file = "genstudio-2024.7.29.2335.tar.gz", hash = "sha256:c7ddb15e94655cec26c84d1c62505513a695d2b154edbee2434101c0f21f868b"},
+    {file = "genstudio-2024.7.30.1617-py3-none-any.whl", hash = "sha256:1757e9365fb58d11c608123811eef928ed6975cf50cd3da11ae79341a46fd61c"},
+    {file = "genstudio-2024.7.30.1617.tar.gz", hash = "sha256:d199db9e4c2357da63518db902de1a58c0e132f0e327c56d3bf2f8c57aec214b"},
 ]
 
 [package.dependencies]
 anywidget = ">=0.9.10,<0.10.0"
 html2image = ">=2.0.4.3,<3.0.0.0"
-jax = ">=0.4.25,<0.5.0"
-jaxlib = ">=0.4.28,<0.5.0"
+jax = ">=0.4.24,<0.5.0"
 numpy = ">=1.26.4,<2.0.0"
 orjson = ">=3.10.6,<4.0.0"
 penzai = ">=0.1.1,<0.2.0"
@@ -2199,4 +2198,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10, <3.13"
-content-hash = "af5c1b35a9cf31951de71a245ea4f9276c4292852d944a107a92ba62b54a9666"
+content-hash = "83fb39f774d4d7cb54fdc5a8d5403f3b2d54a031f0a2b9ffa5cee29749265ccf"
