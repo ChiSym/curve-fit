@@ -120,6 +120,7 @@ function renderShader(modelSize: number): string {
     }
 
     // curves: blended
+    uint curve_count = 0u;
     for (uint i = 0u, ci = 0u; i < n_models; ++i, ci+=MODEL_SIZE) {
       float a0 = coefficients[ci];
       float a1 = coefficients[ci+1u];
@@ -140,8 +141,9 @@ function renderShader(modelSize: number): string {
       float Fxy = xy.y - p.y;
       vec2 GFxy = vec2(dFdx(Fxy), dFdy(Fxy));
       float sd = Fxy / length(GFxy);
-      if (abs(sd) < 1.0) out_color = mix(vec4(0.0, 0.0, 0.0, 1.0), out_color, 0.65);
+      if (abs(sd) < 1.0) ++curve_count;
     }
+    if (curve_count > 0u) out_color = mix(out_color, vec4(0.0,0.0,0.0,1.0), 1.0-pow(0.70,float(curve_count)));
 
     for (int i = 0; i < N_POINTS; ++i) {
       float d = distance(points[i], xy);
