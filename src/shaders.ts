@@ -1,4 +1,4 @@
-export const pcg3d = /* glsl */ `
+const pcg3d = /* glsl */ `
 
 // The rules: if you use any part of the seed, it's your responsibility
 // to call this routine to mutate the seed for the next user.
@@ -16,7 +16,7 @@ uvec3 pcg3d(uvec3 v) {
 }
 `
 
-export const beta = /* glsl */ `
+const lgamma = /* glsl */ `
 
 const float lgamma_coefficient[] = float[6](
   76.18009172947146,
@@ -38,7 +38,7 @@ float lgamma(float xx) {
 
 `
 
-export const randomUniform = /* glsl */ `
+const randomUniform = /* glsl */ `
 // recovered from de-compiled JAX
 float random_uniform(inout uvec3 seed, float low, float high) {
   float a = uintBitsToFloat(seed.x >> 9u | 1065353216u) - 1.0;
@@ -50,7 +50,7 @@ float random_uniform(inout uvec3 seed, float low, float high) {
 }
 `
 
-export const logpdfUniform = /* glsl */ `
+const logpdfUniform = /* glsl */ `
 // recovered from de-compiled JAX
 float logpdf_uniform(float v, float low, float high) {
   bool d = v != v;
@@ -66,7 +66,7 @@ float logpdf_uniform(float v, float low, float high) {
 }
 `
 
-export const flip = /* glsl */ `
+const flip = /* glsl */ `
 bool flip(inout uvec3 seed, float prob) {
   if (prob >= 1.0) return true;
   float a = random_uniform(seed, 0.0, 1.0);
@@ -74,7 +74,7 @@ bool flip(inout uvec3 seed, float prob) {
 }
 `
 
-export const erfc = /* glsl */ `
+const erfc = /* glsl */ `
 // From Press NR 3ed.
 // A lower-order Chebyshev approximation produces a very concise routine, though with only about single precision accuracy:
 // Returns the complementary error function with fractional error everywhere less than 1.2e-7.
@@ -87,7 +87,7 @@ float erfc(float x) {
 }
 `
 
-export const invErfc = /* glsl */ `
+const invErfc = /* glsl */ `
 // The following two functions are from
 // http://www.mimirgames.com/articles/programming/approximations-of-the-inverse-error-function/
 float inv_erfc(float x) {
@@ -112,20 +112,20 @@ float inv_erfc(float x) {
 }
 `
 
-export const invErf = /* glsl */ `
+const invErf = /* glsl */ `
 float inv_erf(float x){
   return inv_erfc(1.0-x);
 }
 `
 
-export const randomNormal = /* glsl */ `
+const randomNormal = /* glsl */ `
 float random_normal(inout uvec3 seed, float loc, float scale) {
   float u = sqrt(2.0) * inv_erf(random_uniform(seed, -1.0, 1.0));
   return loc + scale * u;
 }
 `
 
-export const logpdfNormal = /* glsl */ `
+const logpdfNormal = /* glsl */ `
 // De-compiled from JAX genjax.normal.logpdf
 float logpdf_normal(float v, float loc, float scale) {
   float d = v / scale;
@@ -139,9 +139,9 @@ float logpdf_normal(float v, float loc, float scale) {
 }
 `
 
-export const computeShader = /* glsl */ `#version 300 es
+const stdlib = `
   ${pcg3d}
-  ${beta}
+  ${lgamma}
   ${randomUniform}
   ${logpdfUniform}
   ${flip}
@@ -150,72 +150,181 @@ export const computeShader = /* glsl */ `#version 300 es
   ${invErf}
   ${randomNormal}
   ${logpdfNormal}
+`
 
-  #define N_POINTS 10
+export function importanceShader(nParameters: number): string {
+  return /* glsl */ `#version 300 es
+
+  ${stdlib}
+
+  #define N_POINTS 10u
   #define N_POLY 3
   #define N_SAMPLES 50
+  #define M_PI 3.1415926535897932384626433832795
 
   uniform vec2 points[N_POINTS];
-  uniform vec3 alpha_loc;
-  uniform vec3 alpha_scale;
+  uniform float alpha_loc[${nParameters}];
+  uniform float alpha_scale[${nParameters}];
+  uniform uint component_enable;
 
   in uvec3 seed;
-  out vec3 model;
-  flat out uint outliers;
-  out float weight;
-  out vec3 params;
 
-  vec3 sample_alpha(inout uvec3 seed) {
-    return vec3(
-      random_normal(seed, alpha_loc[0], alpha_scale[0]),
-      random_normal(seed, alpha_loc[1], alpha_scale[1]),
-      random_normal(seed, alpha_loc[2], alpha_scale[2])
-    );
+  out float out_0;
+  out float out_1;
+  out float out_2;
+  out float out_3;
+  out float out_4;
+  out float out_5;
+  out float out_6;
+  out float out_log_weight;
+  out float out_p_outlier;
+  out float out_outliers;
+  out float out_inlier_sigma;
+
+  vec3 sample_poly(inout uvec3 seed) {
+    if ((component_enable & 1u) != 0u) {
+      return vec3(
+        random_normal(seed, alpha_loc[0], alpha_scale[0]),
+        random_normal(seed, alpha_loc[1], alpha_scale[1]),
+        random_normal(seed, alpha_loc[2], alpha_scale[2])
+      );
+    } else {
+      return vec3(0.0, 0.0, 0.0);
+    }
+  }
+
+  vec3 sample_periodic(inout uvec3 seed) {
+    if ((component_enable & 2u) != 0u) {
+      return vec3(
+        random_normal(seed, alpha_loc[3], alpha_scale[3]),
+        random_normal(seed, alpha_loc[4], alpha_scale[4]),
+        random_normal(seed, alpha_loc[5], alpha_scale[5])
+      );
+    } else {
+      return vec3(0.0, 0.0, 0.0);
+    }
   }
 
   float evaluate_poly(vec3 coefficients, float x) {
-    return coefficients[0] + x * coefficients[1] + x * x * coefficients[2];
+    // components x, y, z map to a_0, a_1, a_2
+    return coefficients.x + x * coefficients.y + x * x * coefficients.z;
   }
 
-  struct result {
-    uint outliers;
-    vec3 model;
-    float weight;
-    float p_outlier;
-  };
+  float evaluate_periodic(vec3 parameters, float x) {
+    // components x, y, z map to omega, A, phi
+    return parameters.y * sin(parameters.z + parameters.x * x);
+  }
 
-  result curve_fit_importance(inout uvec3 seed) {
+  float evaluate_model(in vec3 polynomial_parameters, in vec3 periodic_parameters, in float x) {
+    float y_model = 0.0;
+    if ((component_enable & 1u) != 0u) {
+      y_model += evaluate_poly(polynomial_parameters, x);
+    }
+    if ((component_enable & 2u) != 0u) {
+      y_model += evaluate_periodic(periodic_parameters, x);
+    }
+    return y_model;
+  }
+
+  void curve_fit_importance(inout uvec3 seed) {
     // Find the importance of the model generated from
     // coefficients. The "choice map" in this case is one
     // that sets the ys to the observed values. The model
     // has an outlier probability, two normal ranges for
     // inlier and outlier, and a fixed set of xs. We generate
-    // the y values from the polynomial, and compute the
+    // the y values from the curve, and compute the
     // logpdf of these given the expected values and the
     // outlier choices. Sum all that up and it's the score of
     // the model.
-    float w = 0.0;
-    uint outliers = 0u;
-    vec3 coefficients = sample_alpha(seed);
+    //float inlier_sigma = random_normal(seed, alpha_loc[6], alpha_scale[6]);
+    float inlier_sigma = 0.3;
+    float log_w = 0.0;
+    uint outlier_bits = 0u;
+    vec3 polynomial_parameters = sample_poly(seed);
+    vec3 periodic_parameters = sample_periodic(seed); // how to update seed?
     float p_outlier = random_uniform(seed, 0.0, 1.0);
-    for (int i = 0; i < N_POINTS; ++i) {
+    for (uint i = 0u; i < N_POINTS; ++i) {
       bool outlier = flip(seed, p_outlier);
-      outliers = outliers | (uint(outlier) << i);
-      float y_model = evaluate_poly(coefficients, points[i].x);
-      float y_observed = points[i].y;
-      w += logpdf_normal(y_observed, y_model, outlier ? 3.0 : 0.3);
+      outlier_bits = outlier_bits | (uint(outlier) << i);
+      float y_model = evaluate_model(polynomial_parameters, periodic_parameters, points[i].x);
+      log_w += logpdf_normal(points[i].y, y_model, outlier ? 3.0 : inlier_sigma);
+      //if (!outlier) {
+      //  w += logpdf_normal(y_observed, y_model, inlier_sigma);
+      //}
+      // w += logpdf_normal(inlier_sigma, alpha_loc[6], alpha_scale[6]);
     }
-    return result(outliers, coefficients, w, p_outlier);
+    out_0 = polynomial_parameters[0];
+    out_1 = polynomial_parameters[1];
+    out_2 = polynomial_parameters[2];
+    out_3 = periodic_parameters[0];
+    out_4 = periodic_parameters[1];
+    out_5 = periodic_parameters[2];
+    out_6 = inlier_sigma;
+    out_log_weight = log_w;
+    out_p_outlier = p_outlier;
+    out_outliers = float(outlier_bits);
+    out_inlier_sigma = inlier_sigma;
   }
 
 
   void main() {
     uvec3 seed = pcg3d(seed);
-    result r = curve_fit_importance(seed);
-    outliers = r.outliers;
-    weight = r.weight;
-    model = r.model;
-    params = vec3(r.p_outlier);
-    //params.x = r.p_outlier;
+    curve_fit_importance(seed);
+  }
+`
+}
+
+// // we're not using this yet; instead we're going to prototype it in JS and
+// // move it here when we figure out what we're doing
+// const curveFitDrift = /* glsl */ `
+
+//   ${stdlib}
+
+//   in uvec3 seed;
+//   in vec3 poly_parameters;
+//   in vec3 periodic_parameters;
+
+//   void curve_fit_drift(inout uvec3 seed) {
+//     // Our task: drift the components of the model, recompute the y,
+//     // evaluate the ratio of the old to the new, "flip coin" to accept/reject,
+//     // return the data.
+//     const float inlier_sigma = 0.3; // FIXME
+//     vec3 drift_poly = sample_poly(seed);
+//     vec3 drift_periodic = sample_periodic(seed);
+//     for (uint i = 0u; i < N_POINTS; ++i) {
+//       float x = points[i].x;
+//       float y_orig = evaluate_model(orig_poly, orig_periodic, x);
+//       float y_drift = evaluate_model(drift_poly, drift_periodic, x);
+//       float w_orig = logpdf_normal(points[i].y, y_orig, outlier ? 3.0 : inlier_sigma);
+//       float w_drift = logpdf_normal(points[i].y, y_drift, outlier ? 3.0 : inlier_sigma);
+//       float w_score = y_drift / y_orig;
+//       float u = random_uniform(seed, 0.0, 1.0);
+//       if (u <= exp(w_score)) {
+//         // accept
+//         out_0 = drift_poly[0];
+//         out_1 = drift_poly[1];
+//         out_2 = drift_poly[2];
+//         out_3 = drift_periodic[0];
+//         out_4 = drift_periodic[1];
+//         out_5 = drift_periodic[2];
+//         out_accept = 1;
+//         out_log_weight = w_drift;
+//       } else {
+//         out_0 = orig_poly[0];
+//         out_1 = orig_poly[1];
+//         out_2 = orig_poly[2];
+//         out_3 = orig_periodic[0];
+//         out_4 = orig_periodic[1];
+//         out_5 = orig_periodic[2];
+//         out_accept = 0;
+//         out_log_weight = w_orig;
+//       }
+//     }
+//   }
+// `
+
+export const computeFragmentShader = /* glsl */ `#version 300 es
+  precision highp float;
+  void main() {
   }
 `
