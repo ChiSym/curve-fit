@@ -124,7 +124,7 @@ zap = exponential * (periodic @ exponential)
 # plot...
 
 # %% [markdown]
-# ## Trying to fit curves to data
+# ## Fitting curves to data: optimization
 #
 # The problem is widely familiar: from algebra on up, students fit curves to data by backsolving for the coefficients in a function.
 #
@@ -140,7 +140,7 @@ zap = exponential * (periodic @ exponential)
 # We will consider these as a model for data sets that do not exactly lie on curves.
 
 # %%
-# Example
+# Example of some NoisyCurve samples = finite point sets, drawn from a single curve at a time
 
 # %% [markdown]
 # ### Classic technique: least squares
@@ -168,7 +168,8 @@ jnp.linalg.lstsq
 # Conveniently, the log density of a sample $(y_i)_i$ under one or our noisy curve distributions is the sum of the corresponding log normal densities of the $y_i$, which are in turn proportional to the squared errors $(f(x_i)-y_i)^2$.  Thus optimizing the log density of a dataset under this distribution *for varying curves* is equivalent to optimizing the sum-squared error.
 
 # %%
-# Example
+# Work through an example
+# Requires feeding automatic differentiation through Blocks
 
 # %% [markdown]
 # ### The problem of outliers
@@ -176,14 +177,14 @@ jnp.linalg.lstsq
 # Blind optimization suffers from sensitivity to outliers in the data.
 
 # %%
-# Example
+# Example of an outlier throwing off an optimization
 
 # %% [markdown]
 # We can instead imagine curves that produce noisy data *including some outliers*.  This intuition can be simply codified into a more sophisticated distribution.
 
 # %%
-# Example
 # NoisyOutliersCurve object
+# Example of some NoisyOutliersCurve samples = finite point sets, drawn from a single curve at a time
 
 # %% [markdown]
 # We again get a reasonable notion of how good a fit is (density in the data model).
@@ -191,13 +192,45 @@ jnp.linalg.lstsq
 # How to optimize in non-differentiable context?
 
 # %% [markdown]
-# ## Probabilistic optimization: conditioning
+# ### The issue of multiple modes
 #
-# Bigger picture: Conditioning = generating data consistent with observations in a precise sense.
+# A subtler issue lurks our methodology: the assumption has already been baked in that the answer to the fitting problem consists of a single best curve.
 #
-# Inference = implementing conditioning.
+# For example, the same data can be perfectly fit by curves of two very different parameters:
+
+# %%
+# Example of a data set plus a couple very different looking BlockFunctions (maybe same Block but different params?) that fit the data well.
+
+# %% [markdown]
+# What kind of solutions to the fitting problem should we even be looking for, that reflect the diversity of acceptable answers?
+
+# %% [markdown]
+# ## Fitting curves to data: conditioning
 #
-# In general, exact inference is hard-to-impossible, and better approxiamations require more compute; herein lies the ProbProgrammer's design space.
+# Probability theory is a language that allows a precise form of reasoning about uncertain values.  In short, the object that soundly answers the curve fitting problem is a *probability distribution over curves*, expressing which curves were more likely to have generated the data.  Then our particular answers of best-fit curves are simply the (possibly multitudinous) relatively high-probability samples from this distribution.
+#
+# ### Bayesian reasoning
+#
+# Bayesian reasoning is a framework that starts with the following assumptions.
+# * The first input is a *prior distribution* over hypotheses, which expresses which ones we are willing to consider, and how relatively willing we are to consider them, in advance of seeing the data set.  We package all of our knowledge or ignorance about which hypotheses will be relevant into this.
+#   *  In our case study, the hypotheses are curves, and each Block expresses a prior over curves.
+# * The second input is called the *likelihood kernel*, and it expresses how likey any observed data should be, given which hypothesis holds.  In other words, it is a function from hypotheses to probability distributions over data.
+#   *  In our case study, a likelihood is supplied by one of our data models, with just noise, or noise plus outliers.
+# * The third input is the new information of the *data*.
+#
+# Given the fact that we have observed the data, how ought we update our beliefs about our hypotheses?  What new probability distribution, call it the *posterior distribution*, over hypotheses expresses these updated beliefs?  In order to answer, we make the following constructions.
+# * The prior and the likelihood assemble into a *joint distribution* which expresses the total probability of an experiment in which both a hypothesis holds and the particular data were observed.
+#   * Numerically it simply computes the product of the prior probability and the likelihood probability.
+# * The joint distribution is used to define the *marginal distribution*, which is a probability distribution over the data.  It expresses our total belief of how likely we should believe a data will be observed, upon averaging (according to our prior beliefs) over all hypotheses that might lead to them being observed.
+#   * Numerically it is a sum/integral over hypotheses with respect to the prior.
+# * The joint and the marginal are together used to define the *conditional distribution* over hypotheses given the data.  The conditional density of some hypothesis given some observed data is proportional to the joint probability of the two.  It simply needs to be renormalized so that the total probability of the hypotheses with the given data is again $1$.  This works out to be:
+#   * Numerically, the conditional probability of a hypothesis is equal to its joint probability together with the data, divided by the marginal probability of the data.
+#
+# The Bayesian view is that the posterior distribution is none other than the conditional distribution.
+#
+# The art of *implementing* conditioning is what we call *Bayesian inference*.  In particular, generating samples from the conditional distribution is precisely the same as inferring which hypotheses are good fits to the observations.
+#
+# In general, exact inference is computationally hard-to-impossible, and better approxiamations require more compute; herein lies the ProbProgrammer's design space.
 
 # %% [markdown]
 # ### Inference 1: needle in haystack
