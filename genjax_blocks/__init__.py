@@ -7,6 +7,7 @@ from .blocks import (
     Exponential,
     Periodic,
     Polynomial,
+    plot_functions,
 )
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "Periodic",
     "Polynomial",
     "Exponential",
+    "plot_functions",
 ]
 
 __version__ = metadata.version("genjax-blocks")

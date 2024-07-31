@@ -9,6 +9,7 @@ import jax.random
 from genjax import Pytree
 from genjax.core import GenerativeFunctionClosure, GenerativeFunction
 from genjax.typing import Callable, FloatArray, PRNGKey, ArrayLike, Tuple, List
+import genstudio.plot as Plot
 
 
 class Block:
@@ -273,3 +274,22 @@ class CurveFit:
         # globalize the indices by adding back the index of the start of each batch.
         winners += jnp.arange(0, N * K, N)
         return jax.tree.map(lambda x: x[winners], samples)
+
+def plot_functions(fns: BlockFunction, winningIndex=None, **kwargs):
+    xs = jnp.linspace(-1, 1, 40)
+    yss = jax.vmap(fns)(xs)
+
+    def winner(i):
+        return i == winningIndex
+
+    return Plot.new(
+        [
+            Plot.line({"x": xs, "y": ys},
+                      curve="cardinal-open",
+                      stroke="black" if winner(i) else i%12,
+                      strokeWidth=4 if winner(i) else 1)
+            for i, ys in enumerate(yss.T)
+        ],
+        Plot.domain([-1, 1]),
+        {"clip": True, "height": 400, "width": 400},
+    )
