@@ -189,11 +189,11 @@ def powers_vector(x, max_degree):
 xs_powers = powers_vector(xs, 4)
 
 # Find the least squares fit to the system of equations
-# [m_0, m_1, ..., m_d] dot [1, x_i, x_i**2, ..., x_i**d] == m_0 + m_1 * x_i + m_2 * x_i**2 + ... + m_d * x_i**d == y_i.
-ms = jnp.linalg.lstsq(xs_powers, ys)[0]
+# [c_0, c_1, ..., c_d] dot [1, x_i, x_i**2, ..., x_i**d] == c_0 + c_1 * x_i + c_2 * x_i**2 + ... + c_d * x_i**d == y_i.
+cs = jnp.linalg.lstsq(xs_powers, ys)[0]
 
 # TODO: plot (xs,ys) plus the polynomial y = (coeffs = ms)(x).
-ms
+cs
 
 # %% [markdown]
 # ### Gradient descent via noisy curves
