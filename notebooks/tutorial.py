@@ -20,14 +20,9 @@ if "google.colab" in sys.modules:
     from google.colab import auth  # pyright: ignore [reportMissingImports]
 
     auth.authenticate_user()
-    # %pip install --quiet keyring keyrings.google-artifactregistry-auth  # type: ignore # noqa
-    # %pip install --quiet genjax==0.4.0.post4.dev0+9d775c6f genstudio==v2024.06.20.1130 genjax-blocks==0.1.0 --extra-index-url https://us-west1-python.pkg.dev/probcomp-caliban/probcomp/simple/  # type: ignore # noqa
-    # This example will work on GPU, CPU or TPU. To change your runtime,
-    # select "Change runtime type" from the dropdown on the top right
-    # of the colab page.
-    #
-    # Make sure that the string in brackets below is either `cuda12` (for GPU), `cpu` or `tpu`:
-    # %pip install --quiet jax[cpu]==0.4.28  # type: ignore # noqa
+    %pip install --quiet keyring keyrings.google-artifactregistry-auth  # type: ignore # noqa
+    %pip install --quiet genjax-blocks==0.1.0.post8.dev0+a289d26 --extra-index-url https://us-west1-python.pkg.dev/probcomp-caliban/probcomp/simple/  # type: ignore # noqa
+
 # %% [markdown]
 # # Curve fitting via distributions and inference
 #
@@ -37,6 +32,7 @@ if "google.colab" in sys.modules:
 
 # %%
 import genjax
+import functools
 from genjax import ChoiceMapBuilder as C
 from genjax.typing import PRNGKey, FloatArray, ArrayLike
 import genjax_blocks as b
@@ -70,6 +66,8 @@ u.simulate(key=subkey, args=()).get_retval()
 
 # %%
 # make a plot
+
+Plot.histogram(u.repeat(n=1000).simulate(key=subkey, args=()).get_retval())
 # ... can't we just monadically thread the random key somehow?
 
 # %% [markdown]
@@ -86,7 +84,11 @@ exponential2 = b.Exponential(a=genjax.normal(1.0,0.1), b = genjax.normal(1.0, 0.
 
 # plot some samples...
 
-# %% [markdown]
+( b.plot_functions(exponential.sample(100).get_retval())
+ & b.plot_functions(exponential2.sample(100).get_retval()) )
+
+# %%
+    # %% [markdown]
 # Similarly for sinusoidal functions $f(x) = a \sin(2\pi (x - \varphi)/T)$.
 
 # %%
@@ -98,6 +100,7 @@ periodic = b.Periodic(
 
 # plot...
 
+b.plot_functions(periodic.sample(25).get_retval())
 
 # %% [markdown]
 # Similarly for polynomial for a *fixed max degree*, and the same distribution across all the coeffs.
@@ -109,7 +112,11 @@ quadratic = b.Polynomial(max_degree=2, coefficient_d=genjax.normal(0.0, 1.0))
 cubic = b.Polynomial(max_degree=3, coefficient_d=genjax.normal(0.0, 2.0))
 
 # plot...
-
+# %%
+functools.reduce(lambda a, b: a & b, [
+    b.plot_functions(f.sample(25).get_retval())
+    for f in [linear, quadratic, cubic]
+])
 # %% [markdown]
 # ### Combining distributions over curves
 #
@@ -121,7 +128,13 @@ cubic = b.Polynomial(max_degree=3, coefficient_d=genjax.normal(0.0, 2.0))
 wiggly_arc = quadratic + periodic
 zap = exponential * (periodic @ exponential)
 
+# %%
 # plot...
+functools.reduce(lambda a, b: a & b, [
+    b.plot_functions(f.sample(25).get_retval())
+    for f in [wiggly_arc, zap]
+])
+
 
 # %% [markdown]
 # ## Fitting curves to data: optimization
@@ -167,7 +180,11 @@ m, b = jnp.linalg.lstsq(xs_augmented, ys)[0]
 
 # TODO: plot (xs,ys), plus the line y = m*x+b
 m, b
-
+# %%
+line = lambda x: m*x + b
+Plot.new(
+    [Plot.dot(zip(xs, ys)), Plot.line([[xs[0], line(xs[0])], [xs[-1],line(xs[-1])]])]
+)
 # %% [markdown]
 # Sometimes least squares fitting may be hijacked to solve other problems.  For instance, suppose we wanted to fit a polynomial curve of fixed degree $d$ to some data $(x_i,y_i)$ for $i=1,\ldots,N$.  The right hand side of the desired equation $y = a_d x^d + a_{d-1} x^{d-1} + \cdots + a_1 x + a_0$ may be a polynomial in $x$, but it is a *linear function of the powers of $x$*.  Therefore we can perform least squares fitting on the data $(\vec x_i,y_i)$ where $\vec x_i$ is the vector of powers of $x_i$.
 
@@ -194,7 +211,12 @@ cs = jnp.linalg.lstsq(xs_powers, ys)[0]
 
 # TODO: plot (xs,ys) plus the polynomial y = (coeffs = ms)(x).
 cs
-
+# %%
+moar_xs = jnp.linspace(xs[0], xs[-1], 3 * xs.shape[0])
+pts = zip(moar_xs, powers_vector(moar_xs,4) @ cs)
+Plot.new(
+    [Plot.dot(zip(xs, ys)), Plot.line(pts)]
+)
 # %% [markdown]
 # ### Gradient descent via noisy curves
 #
