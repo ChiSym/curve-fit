@@ -123,14 +123,25 @@ export class GPGPU_Inference {
     this.tf = this.wgl.createTransformFeedback()
     gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, this.tf)
 
-    this.bigBuf = this.wgl.makeBuffer(maxTrials * this.floatsPerSeed * Float32Array.BYTES_PER_ELEMENT)
+    this.bigBuf = this.wgl.makeBuffer(
+      maxTrials * this.floatsPerSeed * Float32Array.BYTES_PER_ELEMENT,
+    )
     gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, this.bigBuf)
     gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null)
     gl.bindBuffer(gl.ARRAY_BUFFER, null)
 
-    this.pointsLoc = this.wgl.getUniformLocation(this.importanceProgram, "points")
-    this.alphaLocLoc =  this.wgl.getUniformLocation(this.importanceProgram, "alpha_loc")
-    this.alphaScaleLoc = this.wgl.getUniformLocation(this.importanceProgram, "alpha_scale")
+    this.pointsLoc = this.wgl.getUniformLocation(
+      this.importanceProgram,
+      "points",
+    )
+    this.alphaLocLoc = this.wgl.getUniformLocation(
+      this.importanceProgram,
+      "alpha_loc",
+    )
+    this.alphaScaleLoc = this.wgl.getUniformLocation(
+      this.importanceProgram,
+      "alpha_scale",
+    )
     this.componentEnableLoc = this.wgl.getUniformLocation(
       this.importanceProgram,
       "component_enable",
@@ -309,33 +320,20 @@ export class GPGPU_Inference {
     }
 
     function evaluate(coefficients: Float32Array, x: number) {
-      const y_poly = coefficients[0] + x * coefficients[1] + x*x*coefficients[2];
-      const y_periodic = coefficients[4] + Math.sin(coefficients[5] + coefficients[3] * x);
+      const y_poly =
+        coefficients[0] + x * coefficients[1] + x * x * coefficients[2]
+      const y_periodic =
+        coefficients[4] + Math.sin(coefficients[5] + coefficients[3] * x)
       return y_poly + y_periodic
     }
 
-    const xs = mParams.points.map(p => p[0])
+    const xs = mParams.points.map((p) => p[0])
 
     for (const m of models) {
       const parameters = m.model
-      const drifted = parameters.map(v => v + driftScale * random_normal())
-      const drifted_ys = xs.map(x => evaluate(drifted, x))
-
-
-
-
-
-
-
-
-
-
-
-
-
+      const drifted = parameters.map((v) => v + driftScale * random_normal())
+      const drifted_ys = xs.map((x) => evaluate(drifted, x))
     }
-
-
   }
 
   cleanup(): void {
