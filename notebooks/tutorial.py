@@ -150,15 +150,50 @@ zap = exponential * (periodic @ exponential)
 # A common answer is to choose the $M$ and $\vec b$ that minimize the sum of the squared errors $\sum_{i=1}^N \|M\vec x_i + \vec b - \vec y_i\|^2$.  With a little elbow grease, this can be explicitly solved.
 
 # %%
-# Example: some points and a line
-jnp.linalg.lstsq
+# TODO: choose better points?
+xs = jnp.linspace(-0.7, 0.7, 10)
+ys = (
+    -0.2
+    + 0.4 * xs
+    + 0.05 * jax.random.normal(key=jax.random.PRNGKey(1), shape=xs.shape)
+)
+
+# Reform the xs = [..., x_i, ...] into a matrix whose rows are the augmented vectors [x_i, 1].
+xs_augmented = jnp.vstack([xs, jnp.ones(len(xs))]).T
+
+# Find the least squares fit to the system of equations
+# [m, b] dot [x_i, 1] == m x_i + b == y_i.
+m, b = jnp.linalg.lstsq(xs_augmented, ys)[0]
+
+# TODO: plot (xs,ys), plus the line y = m*x+b
+m, b
 
 # %% [markdown]
 # Sometimes least squares fitting may be hijacked to solve other problems.  For instance, suppose we wanted to fit a polynomial curve of fixed degree $d$ to some data $(x_i,y_i)$ for $i=1,\ldots,N$.  The right hand side of the desired equation $y = a_d x^d + a_{d-1} x^{d-1} + \cdots + a_1 x + a_0$ may be a polynomial in $x$, but it is a *linear function of the powers of $x$*.  Therefore we can perform least squares fitting on the data $(\vec x_i,y_i)$ where $\vec x_i$ is the vector of powers of $x_i$.
 
 # %%
-# Example: some points and a polynomial
-jnp.linalg.lstsq
+# TODO: choose better points?
+xs = jnp.linspace(-0.7, 0.7, 10)
+ys = (
+    -0.2
+    + 0.4 * xs
+    + 0.2 * xs**2
+    - 0.4 * xs**3
+    + 0.05 * jax.random.normal(key=jax.random.PRNGKey(1), shape=xs.shape)
+)
+
+# Reform the xs = [..., x_i, ...] into a matrix whose rows are the power-vectors [1, x_i, x_i**2, ..., x_i**d]
+# with d = 4 (cubic).
+def powers_vector(x, max_degree):
+    return jax.vmap(lambda i: x**i)(jnp.arange(max_degree + 1)).T
+xs_powers = powers_vector(xs, 4)
+
+# Find the least squares fit to the system of equations
+# [m_0, m_1, ..., m_d] dot [1, x_i, x_i**2, ..., x_i**d] == m_0 + m_1 * x_i + m_2 * x_i**2 + ... + m_d * x_i**d == y_i.
+ms = jnp.linalg.lstsq(xs_powers, ys)[0]
+
+# TODO: plot (xs,ys) plus the polynomial y = (coeffs = ms)(x).
+ms
 
 # %% [markdown]
 # ### Gradient descent via noisy curves
