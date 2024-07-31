@@ -274,54 +274,54 @@ export function importanceShader(nParameters: number): string {
 `
 }
 
-// we're not using this yet; instead we're going to prototype it in JS and
-// move it here when we figure out what we're doing
-const curveFitDrift = /* glsl */ `
+// // we're not using this yet; instead we're going to prototype it in JS and
+// // move it here when we figure out what we're doing
+// const curveFitDrift = /* glsl */ `
 
-  ${stdlib}
+//   ${stdlib}
 
-  in uvec3 seed;
-  in vec3 poly_parameters;
-  in vec3 periodic_parameters;
+//   in uvec3 seed;
+//   in vec3 poly_parameters;
+//   in vec3 periodic_parameters;
 
-  void curve_fit_drift(inout uvec3 seed) {
-    // Our task: drift the components of the model, recompute the y,
-    // evaluate the ratio of the old to the new, "flip coin" to accept/reject,
-    // return the data.
-    const float inlier_sigma = 0.3; // FIXME
-    vec3 drift_poly = sample_poly(seed);
-    vec3 drift_periodic = sample_periodic(seed);
-    for (uint i = 0u; i < N_POINTS; ++i) {
-      float x = points[i].x;
-      float y_orig = evaluate_model(orig_poly, orig_periodic, x);
-      float y_drift = evaluate_model(drift_poly, drift_periodic, x);
-      float w_orig = logpdf_normal(points[i].y, y_orig, outlier ? 3.0 : inlier_sigma);
-      float w_drift = logpdf_normal(points[i].y, y_drift, outlier ? 3.0 : inlier_sigma);
-      float w_score = y_drift / y_orig;
-      float u = random_uniform(seed, 0.0, 1.0);
-      if (u <= exp(w_score)) {
-        // accept
-        out_0 = drift_poly[0];
-        out_1 = drift_poly[1];
-        out_2 = drift_poly[2];
-        out_3 = drift_periodic[0];
-        out_4 = drift_periodic[1];
-        out_5 = drift_periodic[2];
-        out_accept = 1;
-        out_log_weight = w_drift;
-      } else {
-        out_0 = orig_poly[0];
-        out_1 = orig_poly[1];
-        out_2 = orig_poly[2];
-        out_3 = orig_periodic[0];
-        out_4 = orig_periodic[1];
-        out_5 = orig_periodic[2];
-        out_accept = 0;
-        out_log_weight = w_orig;
-      }
-    }
-  }
-`
+//   void curve_fit_drift(inout uvec3 seed) {
+//     // Our task: drift the components of the model, recompute the y,
+//     // evaluate the ratio of the old to the new, "flip coin" to accept/reject,
+//     // return the data.
+//     const float inlier_sigma = 0.3; // FIXME
+//     vec3 drift_poly = sample_poly(seed);
+//     vec3 drift_periodic = sample_periodic(seed);
+//     for (uint i = 0u; i < N_POINTS; ++i) {
+//       float x = points[i].x;
+//       float y_orig = evaluate_model(orig_poly, orig_periodic, x);
+//       float y_drift = evaluate_model(drift_poly, drift_periodic, x);
+//       float w_orig = logpdf_normal(points[i].y, y_orig, outlier ? 3.0 : inlier_sigma);
+//       float w_drift = logpdf_normal(points[i].y, y_drift, outlier ? 3.0 : inlier_sigma);
+//       float w_score = y_drift / y_orig;
+//       float u = random_uniform(seed, 0.0, 1.0);
+//       if (u <= exp(w_score)) {
+//         // accept
+//         out_0 = drift_poly[0];
+//         out_1 = drift_poly[1];
+//         out_2 = drift_poly[2];
+//         out_3 = drift_periodic[0];
+//         out_4 = drift_periodic[1];
+//         out_5 = drift_periodic[2];
+//         out_accept = 1;
+//         out_log_weight = w_drift;
+//       } else {
+//         out_0 = orig_poly[0];
+//         out_1 = orig_poly[1];
+//         out_2 = orig_poly[2];
+//         out_3 = orig_periodic[0];
+//         out_4 = orig_periodic[1];
+//         out_5 = orig_periodic[2];
+//         out_accept = 0;
+//         out_log_weight = w_orig;
+//       }
+//     }
+//   }
+// `
 
 export const computeFragmentShader = /* glsl */ `#version 300 es
   precision highp float;

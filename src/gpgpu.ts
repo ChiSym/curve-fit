@@ -309,32 +309,32 @@ export class GPGPU_Inference {
     }
   }
 
-  private drift(models: Model[], mParams: ModelParameters, driftScale: number) {
-    // prototype of drift in JS before shader implementation
+  // private drift(models: Model[], mParams: ModelParameters, driftScale: number) {
+  //   // prototype of drift in JS before shader implementation
 
-    function random_normal() {
-      const u1 = 1 - Math.random()
-      const u2 = Math.random()
-      const mag = Math.sqrt(-2 * Math.log(u1))
-      return mag * Math.cos(2 * Math.PI * u2)
-    }
+  //   function random_normal() {
+  //     const u1 = 1 - Math.random()
+  //     const u2 = Math.random()
+  //     const mag = Math.sqrt(-2 * Math.log(u1))
+  //     return mag * Math.cos(2 * Math.PI * u2)
+  //   }
 
-    function evaluate(coefficients: Float32Array, x: number) {
-      const y_poly =
-        coefficients[0] + x * coefficients[1] + x * x * coefficients[2]
-      const y_periodic =
-        coefficients[4] + Math.sin(coefficients[5] + coefficients[3] * x)
-      return y_poly + y_periodic
-    }
+  //   function evaluate(coefficients: Float32Array, x: number) {
+  //     const y_poly =
+  //       coefficients[0] + x * coefficients[1] + x * x * coefficients[2]
+  //     const y_periodic =
+  //       coefficients[4] + Math.sin(coefficients[5] + coefficients[3] * x)
+  //     return y_poly + y_periodic
+  //   }
 
-    const xs = mParams.points.map((p) => p[0])
+  //   const xs = mParams.points.map((p) => p[0])
 
-    for (const m of models) {
-      const parameters = m.model
-      const drifted = parameters.map((v) => v + driftScale * random_normal())
-      const drifted_ys = xs.map((x) => evaluate(drifted, x))
-    }
-  }
+  //   for (const m of models) {
+  //     const parameters = m.model
+  //     const drifted = parameters.map((v) => v + driftScale * random_normal())
+  //     const drifted_ys = xs.map((x) => evaluate(drifted, x))
+  //   }
+  // }
 
   cleanup(): void {
     this.wgl.deleteBuffer(this.seedBuf)
