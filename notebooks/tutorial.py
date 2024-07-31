@@ -133,6 +133,16 @@ zap = exponential * (periodic @ exponential)
 # In another light, only expecting an approximate fit is asking for something weaker, and is a simplifying relaxation of the problem.
 
 # %% [markdown]
+# ### Noisy curves
+#
+# The `NoisyCurve` object represents a distribution over datasets.  It takes in a curve $f(x)$ and a noise level $\sigma$.  When queried for an sample on the inputs $x_i$ for $i=1,\ldots,N$, it independently for each $i=1,\ldots,N$ draws a sample $y_i$ for the normal distribution centered at $f(x_i)$ with standard deviation $\sigma$.
+#
+# We will consider these as a model for data sets that do not exactly lie on curves.
+
+# %%
+# Example
+
+# %% [markdown]
 # ### Classic technique: least squares
 #
 # Suppose we are trying to fit data $(\vec x_i,\vec y_i)$ for $i=1,\ldots,N$ where the $\vec x_i,\vec y_i$ are vectors, using a linear equation $\vec y = M \vec x + \vec b$ where $M$ is a matrix and $\vec b$ is a vector.  When $N$ is large and the system is overdetermined, how do we make sense of the situation?
@@ -155,13 +165,10 @@ jnp.linalg.lstsq
 #
 # The exact solution of least squares breaks down in the non-linear setting, however: the reader is invited to struggle with adapting it to fitting sinusoidal curves to data!  It is then common to approximately optimize the sum-squared error using *gradient descent*.
 #
-# We are going to set up gradient descent for sum-squared error in an equivalent but slightly nonstandard way.  The `NoisyCurve` object represents a distribution over datasets.  It takes in a curve $f(x)$ and a noise level $\sigma$.  When queried for an sample on the inputs $x_i$ for $i=1,\ldots,N$, it independently for each $i=1,\ldots,N$ draws a sample $y_i$ for the normal distribution centered at $f(x_i)$ with standard deviation $\sigma$.  The log density of this sample under this distribution is the sum of the corresponding log normal densities, which are in turn proportional to the squared errors $(f(x_i)-y_i)^2$.  Thus optimizing the log density of a dataset under this distribution *for varying curves* is equivalent to optimizing the sum-squared error.
-#
-# Using this model, we can extract the gradient as follows...
+# Conveniently, the log density of a sample $(y_i)_i$ under one or our noisy curve distributions is the sum of the corresponding log normal densities of the $y_i$, which are in turn proportional to the squared errors $(f(x_i)-y_i)^2$.  Thus optimizing the log density of a dataset under this distribution *for varying curves* is equivalent to optimizing the sum-squared error.
 
 # %%
 # Example
-# NoisyCurve object
 
 # %% [markdown]
 # ### The problem of outliers
@@ -181,14 +188,19 @@ jnp.linalg.lstsq
 # %% [markdown]
 # We again get a reasonable notion of how good a fit is (density in the data model).
 #
-# Bigger picture: Conditioning = generating data consistent with observations in a precise sense.  Inference = implementing conditioning.
+# How to optimize in non-differentiable context?
+
+# %% [markdown]
+# ## Probabilistic optimization: conditioning
 #
-# How to do so in non-differentiable context?
+# Bigger picture: Conditioning = generating data consistent with observations in a precise sense.
+#
+# Inference = implementing conditioning.
 #
 # In general, exact inference is hard-to-impossible, and better approxiamations require more compute; herein lies the ProbProgrammer's design space.
 
 # %% [markdown]
-# ## Inference 1: needle in haystack
+# ### Inference 1: needle in haystack
 #
 # First generate plausible but probabilistically skewed data, then must correct them by resampling.
 #
@@ -198,12 +210,15 @@ jnp.linalg.lstsq
 # Importance sampling examples
 
 # %% [markdown]
-# ## Inference 2: improving our guesses
+# ### Inference 2: improving our guesses
 #
 # We can do much better by exploiting the known structure of the problem.  Starting from a decent guess, we can explore nearby it for better fits.
 
 # %%
 # Gaussian drift
+
+# %%
+# Gradient-biased Gaussian drift
 
 # %% [markdown]
 # # DSL for curve fit inference
