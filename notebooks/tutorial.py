@@ -176,12 +176,13 @@ xs_augmented = jnp.vstack([xs, jnp.ones(len(xs))]).T
 
 # Find the least squares fit to the system of equations
 # [m, b] dot [x_i, 1] == m x_i + b == y_i.
-m, b = jnp.linalg.lstsq(xs_augmented, ys)[0]
+m, y0 = jnp.linalg.lstsq(xs_augmented, ys)[0]
+# calling it `b` overwrites `import genjax_blocks as b` so have to change one or the oher
 
 # TODO: plot (xs,ys), plus the line y = m*x+b
-m, b
+m, y0
 # %%
-line = lambda x: m*x + b
+line = lambda x: m*x + y0
 Plot.new(
     [Plot.dot(zip(xs, ys)), Plot.line([[xs[0], line(xs[0])], [xs[-1],line(xs[-1])]])]
 )
@@ -215,9 +216,37 @@ cs
 moar_xs = jnp.linspace(xs[0], xs[-1], 3 * xs.shape[0])
 pts = zip(moar_xs, powers_vector(moar_xs,4) @ cs)
 Plot.new(
-    [Plot.dot(zip(xs, ys)), Plot.line(pts)]
+    [Plot.dot(list(zip(xs, ys))), Plot.line(list(pts))]
 )
-# %% [markdown]
+# %%
+# an experiment with differentiation
+poly_f = lambda x: powers_vector(x, 4) @ cs
+poly_fp = jax.grad(poly_f)
+# We can't apply poly_fp directly to moar_xs, as grad only works on a function returning
+# a scalar. However, we can vmap the gradient over the points to get the result we want.
+Plot.new(
+    [Plot.line(list(zip(moar_xs, poly_f(moar_xs)))),
+     Plot.line(list(zip(moar_xs, jax.vmap(poly_fp)(moar_xs))))]
+)
+# %%
+# can we differentiate one of our curves?
+sine = b.Periodic(
+    amplitude=genjax.normal(0.4, 0.1),
+    phase=genjax.normal(0.0, 0.001),
+    period=genjax.normal(2.0, 0.1),
+)
+
+# We can't use jax.grad because that requires a scalar-valued function.
+# But we can use the Jacobian!
+sines = sine.sample(20).get_retval()
+b.plot_functions(sines) & b.plot_functions(jax.jacfwd(sines))
+#
+
+# %%
+b.plot_functions(jax.jacfwd(sines))
+#jax.vmap(jax.jacfwd(sines))(xs)[:,0]
+
+ # %% [markdown]
 # ### Gradient descent via noisy curves
 #
 # The exact solution of least squares breaks down in the non-linear setting, however: the reader is invited to struggle with adapting it to fitting sinusoidal curves to data!  It is then common to approximately optimize the sum-squared error using *gradient descent*.
