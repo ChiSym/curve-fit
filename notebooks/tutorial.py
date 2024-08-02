@@ -87,15 +87,14 @@ exponential2 = b.Exponential(a=genjax.normal(1.0,0.1), b = genjax.normal(1.0, 0.
 ( b.plot_functions(exponential.sample(100).get_retval())
  & b.plot_functions(exponential2.sample(100).get_retval()) )
 
-# %%
-    # %% [markdown]
-# Similarly for sinusoidal functions $f(x) = a \sin(2\pi (x - \varphi)/T)$.
+# %% [markdown]
+# Similarly for sinusoidal functions $f(x) = a \sin(2\pi\omega\,(x - \varphi))$.
 
 # %%
 periodic = b.Periodic(
     amplitude=genjax.beta(2.0, 5.0),
     phase=genjax.uniform(0.0, 1.0),
-    period=genjax.normal(1.0, 1.0),
+    frequency=genjax.normal(1.0, 1.0),
 )
 
 # plot...
@@ -233,7 +232,7 @@ Plot.new(
 sine = b.Periodic(
     amplitude=genjax.normal(0.4, 0.1),
     phase=genjax.normal(0.0, 0.001),
-    period=genjax.normal(2.0, 0.1),
+    frequency=genjax.normal(2.0, 0.1),
 )
 
 # We can't use jax.grad because that requires a scalar-valued function.
@@ -246,7 +245,7 @@ b.plot_functions(sines) & b.plot_functions(jax.jacfwd(sines))
 b.plot_functions(jax.jacfwd(sines))
 #jax.vmap(jax.jacfwd(sines))(xs)[:,0]
 
- # %% [markdown]
+# %% [markdown]
 # ### Gradient descent via noisy curves
 #
 # The exact solution of least squares breaks down in the non-linear setting, however: the reader is invited to struggle with adapting it to fitting sinusoidal curves to data!  It is then common to approximately optimize the sum-squared error using *gradient descent*.
@@ -354,7 +353,7 @@ import jax.numpy as jnp
 import penzai.pz as pz
 
 # %% [markdown]
-# The `blocks` library is concentrated on a simple $\mathbb{R}\rightarrow\mathbb{R}$ inference problem, localized to the unit square for convenience, as found in the introductory GenJAX notebooks. We provide a "basis" of polynomial, $ae^{bx}$, and $a\sin(2\pi (x - \varphi)/T)$ functions, each of whose parameters are drawn from a standard distribution that the user supplies. The intro curve fit task contemplates a polynomial of degree 2 with normally distributed coefficients, which we may write as
+# The `blocks` library is concentrated on a simple $\mathbb{R}\rightarrow\mathbb{R}$ inference problem, localized to the unit square for convenience, as found in the introductory GenJAX notebooks. We provide a "basis" of polynomial, $ae^{bx}$, and $a\sin(2\pi\omega\,(x - \varphi))$ functions, each of whose parameters are drawn from a standard distribution that the user supplies. The intro curve fit task contemplates a polynomial of degree 2 with normally distributed coefficients, which we may write as
 
 # %%
 quadratic = b.Polynomial(max_degree=2, coefficient_d=genjax.normal(0.0, 1.0))
@@ -413,7 +412,7 @@ plot_priors(quadratic, 100)
 periodic = b.Periodic(
     amplitude=genjax.beta(2.0, 5.0),
     phase=genjax.uniform(0.0, 1.0),
-    period=genjax.normal(1.0, 1.0),
+    frequency=genjax.normal(1.0, 1.0),
 )
 
 exponential = b.Exponential(a=genjax.normal(0.0, 1.0), b=genjax.normal(0.0, 1.0))

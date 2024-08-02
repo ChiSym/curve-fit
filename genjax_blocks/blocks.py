@@ -86,27 +86,27 @@ class Periodic(Block):
         *,
         amplitude: GenerativeFunctionClosure,
         phase: GenerativeFunctionClosure,
-        period: GenerativeFunctionClosure,
+        frequency: GenerativeFunctionClosure,
     ):
         @genjax.gen
         def periodic_gf() -> BlockFunction:
-            return Periodic.Function(amplitude @ "a", phase @ "φ", period @ "T")
+            return Periodic.Function(amplitude @ "a", phase @ "φ", frequency @ "ω")
 
         super().__init__(periodic_gf())
 
     def address_segments(self):
         yield ("a",)
         yield ("φ",)
-        yield ("T",)
+        yield ("ω",)
 
     @pz.pytree_dataclass
     class Function(BlockFunction):
         amplitude: FloatArray
         phase: FloatArray
-        period: FloatArray
+        frequency: FloatArray
 
         def __call__(self, x: ArrayLike) -> FloatArray:
-            return self.amplitude * jnp.sin(2 * (x - self.phase) * math.pi / self.period)
+            return self.amplitude * jnp.sin(2 * math.pi * self.frequency * (x - self.phase))
 
 
 class Exponential(Block):
