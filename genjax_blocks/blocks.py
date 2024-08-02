@@ -42,37 +42,42 @@ class Block:
     def address_segments(self) -> Generator[Tuple, None, None]:
         raise NotImplementedError()
 
-
+@pz.pytree_dataclass
 class BlockFunction(Pytree):
     """A BlockFunction is a Pytree which is also Callable."""
+    function_family: Callable
+
+    def __init__(self, function_family, params):
+        self.function_family = function_family
+        self.params = params
 
     def __call__(self, x: ArrayLike) -> FloatArray:
-        raise NotImplementedError
+        return self.function_family(*self.params, x)
+    
+    def params_grad(self, x: ArrayLike) -> FloatArray:
+        return jax.jacfwd(lambda params, x: self.function_family(*params, x))(self.params, x)
 
 
 class Polynomial(Block):
     def __init__(self, *, max_degree: int, coefficient_d: GenerativeFunctionClosure):
-        @genjax.gen
-        def polynomial_gf() -> BlockFunction:
-            return Polynomial.Function(coefficient_d.repeat(n=max_degree + 1)() @ "coefficients")
-
-        super().__init__(polynomial_gf())
-
-    def address_segments(self):
-        yield ("coefficients", ...)
-
-    @pz.pytree_dataclass
-    class Function(BlockFunction):
-        coefficients: FloatArray
-
-        def __call__(self, x: ArrayLike):
-            deg = self.coefficients.shape[-1]
+        def polynomial(coeffs, x):
+            deg = coeffs.shape[-1]
             # tricky: we don't want pow to act like a binary operation between two
             # arrays of the same shape; instead, we want it to take each element
             # of the LHS and raise it to each of the powers in the RHS. So we convert
             # the LHS into an (N, 1) shape.
             powers = jnp.pow(jnp.array(x)[jnp.newaxis].T, jnp.arange(deg))
-            return powers @ self.coefficients.T
+            return powers @ coeffs.T
+
+        @genjax.gen
+        def polynomial_gf() -> BlockFunction:
+            params = coefficient_d.repeat(n=max_degree + 1)() @ "coefficients"
+            return BlockFunction(polynomial, params)
+
+        super().__init__(polynomial_gf())
+
+    def address_segments(self):
+        yield ("coefficients", ...)
 
 
 class Periodic(Block):
@@ -83,9 +88,13 @@ class Periodic(Block):
         phase: GenerativeFunctionClosure,
         frequency: GenerativeFunctionClosure,
     ):
+        def periodic(amplitude, phase, frequency, x):
+            return amplitude * jnp.sin(2 * math.pi * frequency * (x + phase))
+
         @genjax.gen
         def periodic_gf() -> BlockFunction:
-            return Periodic.Function(amplitude @ "a", phase @ "φ", frequency @ "ω")
+            params = (amplitude @ "a", phase @ "φ", frequency @ "ω")
+            return BlockFunction(periodic, params)
 
         super().__init__(periodic_gf())
 
@@ -94,35 +103,22 @@ class Periodic(Block):
         yield ("φ",)
         yield ("ω",)
 
-    @pz.pytree_dataclass
-    class Function(BlockFunction):
-        amplitude: FloatArray
-        phase: FloatArray
-        frequency: FloatArray
-
-        def __call__(self, x: ArrayLike) -> FloatArray:
-            return self.amplitude * jnp.sin(2 * math.pi * self.frequency * (x - self.phase))
-
 
 class Exponential(Block):
     def __init__(self, *, a: GenerativeFunctionClosure, b: GenerativeFunctionClosure):
+        def exponential(a, b, x):
+            return a * jnp.exp(b * x)
+
         @genjax.gen
         def exponential_gf() -> BlockFunction:
-            return Exponential.Function(a @ "a", b @ "b")
+            params = (a @ "a", b @ "b")
+            return BlockFunction(exponential, params)
 
         super().__init__(exponential_gf())
 
     def address_segments(self):
         yield ("a",)
         yield ("b",)
-
-    @pz.pytree_dataclass
-    class Function(BlockFunction):
-        a: FloatArray
-        b: FloatArray
-
-        def __call__(self, x: ArrayLike) -> FloatArray:
-            return self.a * jnp.exp(self.b * x)
 
 
 class Pointwise(Block):
@@ -138,26 +134,21 @@ class Pointwise(Block):
         self.f = f
         self.g = g
 
-        @genjax.gen
-        def pointwise_op() -> BlockFunction:
-            return Pointwise.BinaryOperation(f.gf @ "l", g.gf @ "r", op)
+        def pointwise(params_f, params_g, x):
+            return op(f(params_f, x), g(params_g, x))
 
-        super().__init__(pointwise_op())
+        @genjax.gen
+        def pointwise_gf() -> BlockFunction:
+            params = (f.gf @ "l", g.gf @ "r")
+            return BlockFunction(pointwise, params)
+
+        super().__init__(pointwise_gf())
 
     def address_segments(self):
         for s in self.f.address_segments():
             yield ("l",) + s
         for s in self.g.address_segments():
             yield ("r",) + s
-
-    @pz.pytree_dataclass
-    class BinaryOperation(BlockFunction):
-        lhs: BlockFunction
-        rhs: BlockFunction
-        op: Callable[[ArrayLike, ArrayLike], FloatArray] = Pytree.static()
-
-        def __call__(self, x: ArrayLike) -> FloatArray:
-            return self.op(self.lhs(x), self.rhs(x))
 
 
 class Compose(Block):
@@ -168,25 +159,21 @@ class Compose(Block):
         self.f = f
         self.g = g
 
-        @genjax.gen
-        def composition() -> BlockFunction:
-            return Compose.Function(f.gf @ "l", g.gf @ "r")
+        def composite(params_f, params_g, x):
+            return f(params_f, g(params_g, x))
 
-        super().__init__(composition())
+        @genjax.gen
+        def composite_gf() -> BlockFunction:
+            params = (f.gf @ "l", g.gf @ "r")
+            return BlockFunction(composite, params)
+
+        super().__init__(composite_gf())
 
     def address_segments(self):
         for s in self.f.address_segments():
             yield ("l",) + s
         for s in self.g.address_segments():
             yield ("r",) + s
-
-    @pz.pytree_dataclass
-    class Function(BlockFunction):
-        f: BlockFunction
-        g: BlockFunction
-
-        def __call__(self, x: ArrayLike) -> FloatArray:
-            return self.f(self.g(x))
 
 
 class CurveFit:
