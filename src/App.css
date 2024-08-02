@@ -1,0 +1,50 @@
+#root {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+#model-components {
+  text-align: left;
+  grid-template-columns: 280px 280px;
+  column-gap: 1em;
+  display: grid;
+}
+
+.prior-component-title {
+  text-align: center;
+  font-weight: bold;
+  background-color: #ccc;
+}
+
+#inference-parameters {
+  margin: 4px;
+}
+
+#empty-posterior {
+  color: red;
+}
+
+.value-group {
+  background-color: #cde;
+  border-radius: 8px;
+  margin: 4px;
+  padding: 2px;
+}
+
+.log-error {
+  color: #a00;
+}
+
+span.posterior {
+  color: #080;
+  font-style: italic;
+  font-size: smaller;
+}
+
+@media (prefers-color-scheme: dark) {
+  div#model-components {
+    color: #222;
+  }
+}

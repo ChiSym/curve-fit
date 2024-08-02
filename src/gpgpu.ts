@@ -56,6 +56,7 @@ export class GPGPU_Inference {
   private readonly floatsPerSeed: number
   private readonly seeds: Uint32Array
   private readonly weight: Float32Array
+  private readonly inlierSigma: Float32Array
   private readonly parameters: Float32Array
   private readonly p_outlier: Float32Array
   private readonly outlier: Uint32Array
@@ -114,6 +115,7 @@ export class GPGPU_Inference {
     this.parameters = new Float32Array(this.max_trials * nParameters)
     this.p_outlier = new Float32Array(this.max_trials)
     this.outlier = new Uint32Array(this.max_trials)
+    this.inlierSigma = new Float32Array(this.max_trials)
     this.seedBuf = makeBufferAndSetAttribute(this.seeds, this.seedLoc)
     this.floatsPerSeed = GPGPU_Inference.TF_BUFFER_NAMES.length
     this.bigArray = new Float32Array(this.max_trials * this.floatsPerSeed)
@@ -230,6 +232,7 @@ export class GPGPU_Inference {
       this.weight[i] = a[p + this.nParameters]
       this.p_outlier[i] = a[p + this.nParameters + 1]
       this.outlier[i] = a[p + this.nParameters + 2]
+      this.inlierSigma[i] = a[p + this.nParameters + 3]
     }
     // TODO: unbind
 

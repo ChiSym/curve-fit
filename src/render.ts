@@ -27,6 +27,7 @@ export class Render {
       gl_Position = a_position;
     }`
 
+    console.log('render constructor', modelSize)
     const program = wgl.createProgram(vs, renderShader(modelSize))
     this.positionLoc = gl.getAttribLocation(program, "a_position")
     this.pointsLoc = wgl.getUniformLocation(program, "points")
@@ -64,6 +65,7 @@ export class Render {
   }
 
   render(points: number[][], result: InferenceResult): void {
+    console.log('render points', points, 'result', result)
     const gl = this.gl
     const models = result.selectedModels
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)

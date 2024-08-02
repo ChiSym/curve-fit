@@ -1,4 +1,3 @@
-import "./style.css"
 // import { setupCounter } from './counter.ts'
 import { GPGPU_Inference, InferenceParameters } from "./gpgpu.ts"
 import { Render } from "./render.ts"
@@ -80,7 +79,8 @@ class RunningStats {
 
 const initialAlpha = () => params.map((p) => Object.assign({}, p.initialValue))
 
-function main(): void {
+export default function main(): void {
+  console.log('HERE')
   const stats = params.map(() => new RunningStats())
   const modelEnable = new Map()
   const inferenceParameters: InferenceParameters = {
@@ -213,14 +213,14 @@ function main(): void {
   const autoSIR = document.querySelector<HTMLInputElement>("#auto-SIR")!
 
   // render math
-  const mathElements = document.querySelectorAll<HTMLElement>(".katex")
-  Array.from(mathElements).forEach((el) => {
-    if (el.textContent) {
-      katex.render(el.textContent, el, {
-        throwOnError: false,
-      })
-    }
-  })
+  // const mathElements = document.querySelectorAll<HTMLElement>(".katex")
+  // Array.from(mathElements).forEach((el) => {
+  //   if (el.textContent) {
+  //     katex.render(el.textContent, el, {
+  //       throwOnError: false,
+  //     })
+  //   }
+  // })
   let frameCount = 0
   let t0 = 0
   let totalFailedSamples = 0
@@ -278,7 +278,7 @@ function main(): void {
           SIR_Update()
         }
       }
-      requestAnimationFrame(frame)
+      //requestAnimationFrame(frame)
     } catch (error) {
       log("error", error)
     }
@@ -286,8 +286,8 @@ function main(): void {
   requestAnimationFrame(frame)
 }
 
-try {
-  main()
-} catch (error) {
-  log("error", error)
-}
+// try {
+//   main()
+// } catch (error) {
+//   log("error", error)
+// }
