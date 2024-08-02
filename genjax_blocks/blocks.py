@@ -52,19 +52,14 @@ class BlockFunction(Pytree):
 
 class Polynomial(Block):
     def __init__(self, *, max_degree: int, coefficient_d: GenerativeFunctionClosure):
-        @genjax.combinators.repeat(n=max_degree + 1)
-        @genjax.gen
-        def coefficient_gf() -> FloatArray:
-            return coefficient_d @ "coefficients"
-
         @genjax.gen
         def polynomial_gf() -> BlockFunction:
-            return Polynomial.Function(coefficient_gf() @ "p")
+            return Polynomial.Function(coefficient_d.repeat(n=max_degree + 1)() @ "coefficients")
 
         super().__init__(polynomial_gf())
 
     def address_segments(self):
-        yield ("p", ..., "coefficients")
+        yield ("coefficients", ...)
 
     @pz.pytree_dataclass
     class Function(BlockFunction):
