@@ -199,10 +199,10 @@ ys = (
     + 0.05 * jax.random.normal(key=jax.random.PRNGKey(1), shape=xs.shape)
 )
 
-# Reform the xs = [..., x_i, ...] into a matrix whose rows are the power-vectors [1, x_i, x_i**2, ..., x_i**d]
-# with d = 4 (cubic).
+# Form the matrix whose rows are the power-vectors [1, x_i, x_i**2, ..., x_i**d]...
 def powers_vector(x, max_degree):
-    return jax.vmap(lambda i: x**i)(jnp.arange(max_degree + 1)).T
+    return jnp.pow(jnp.array(x)[jnp.newaxis].T, jnp.arange(max_degree + 1))
+# ...with d=4 (quartic)
 xs_powers = powers_vector(xs, 4)
 
 # Find the least squares fit to the system of equations
