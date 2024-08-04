@@ -1,7 +1,6 @@
 // import { setupCounter } from './counter.ts'
-import { GPGPU_Inference, InferenceParameters } from "./gpgpu.ts"
+import { GPGPU_Inference } from "./gpgpu.ts"
 import { Render } from "./render.ts"
-import katex from "katex"
 import type { Normal } from "./model.ts"
 
 const xs = [-0.5, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4]
@@ -24,7 +23,7 @@ function log(level: string, message: unknown): void {
   document.querySelector("#app")?.appendChild(d)
 }
 
-interface NormalParams {
+export interface NormalParams {
   mu: number
   sigma: number
 }
@@ -39,7 +38,6 @@ const params = [
   { name: "inlier", initialValue: { mu: 0.3, sigma: 0.07 } }, // TODO: change to uniform
 ]
 
-const model_components = ["polynomial", "periodic"]
 
 const MODEL_SIZE = params.length
 
@@ -79,78 +77,14 @@ class RunningStats {
 
 const initialAlpha = () => params.map((p) => Object.assign({}, p.initialValue))
 
-export default function main(): void {
+// Sets up and runs the inference animation. Returns a function which can
+// be used to halt the animation (after the current frame is rendered).
+export function run(setInfo, uiParams): () => void {
   console.log('HERE')
+  const inferenceParameters = uiParams().inferenceParameters
   const stats = params.map(() => new RunningStats())
-  const modelEnable = new Map()
-  const inferenceParameters: InferenceParameters = {
-    numParticles: 0,
-    importanceSamplesPerParticle: 0,
-  }
 
   let alpha: Normal[] = initialAlpha()
-
-  function setInnerText(selector: string, text: string): void {
-    const elt = document.querySelector<HTMLSpanElement>(selector)
-    if (elt == null) throw new Error(`unable to find ${selector}`)
-    elt.innerText = text
-  }
-
-  function setupSlider(
-    elementName: string,
-    effect: (value: number) => void,
-  ): void {
-    const elt = document.querySelector<HTMLInputElement>(elementName)
-    const vElt = document.querySelector<HTMLSpanElement>(elementName + "-value")
-    if (elt != null) {
-      elt.addEventListener("input", (event) => {
-        const target = event.target as HTMLInputElement
-        effect(target.valueAsNumber)
-        if (vElt != null) {
-          vElt.innerText = target.value
-        }
-      })
-      if (vElt != null) {
-        vElt.innerText = elt.valueAsNumber.toFixed(2)
-      }
-    } else {
-      console.log(`cannot find ${elementName}`)
-    }
-  }
-
-  model_components.forEach((m) => {
-    const elt = document.querySelector<HTMLInputElement>("#" + m + "_enable")
-    if (elt) {
-      modelEnable.set(m, true)
-      elt.checked = true
-      elt.addEventListener("change", () => {
-        modelEnable.set(m, elt.checked)
-        console.log(modelEnable)
-      })
-    } else console.log(`can't find ${m}`)
-  })
-
-  Object.keys(inferenceParameters).forEach((m) => {
-    const elt = document.querySelector<HTMLSelectElement>("#" + m)
-    if (elt) {
-      elt.addEventListener("change", () => {
-        console.log(`${m} -> ${parseInt(elt.value)}`)
-        inferenceParameters[m as keyof InferenceParameters] = parseInt(
-          elt.value,
-        )
-      })
-      elt.dispatchEvent(new CustomEvent("change"))
-    }
-  })
-
-  params.forEach((p, i) => {
-    setupSlider("#" + p.name + "_mu", (v) => {
-      alpha[i].mu = v
-    })
-    setupSlider("#" + p.name + "_sigma", (v) => {
-      alpha[i].sigma = v
-    })
-  })
 
   const maxSamplesPerParticle = 100_000
   // XXX: could get the above two constants by looking at the HTML,
@@ -188,6 +122,13 @@ export default function main(): void {
     }
   }
 
+  let stopAnimation = false
+
+  function stop() {
+    console.log('requesting animation halt')
+    stopAnimation = true;
+  }
+
   function SIR_Update() {
     setSliderValues(stats.map((s) => s.summarize(), [stats.keys()]))
   }
@@ -207,33 +148,23 @@ export default function main(): void {
     .querySelector<HTMLButtonElement>("#reset-priors")
     ?.addEventListener("click", Reset)
 
-  const emptyPosterior =
-    document.querySelector<HTMLSpanElement>("#empty-posterior")!
   const pause = document.querySelector<HTMLInputElement>("#pause")!
   const autoSIR = document.querySelector<HTMLInputElement>("#auto-SIR")!
 
-  // render math
-  // const mathElements = document.querySelectorAll<HTMLElement>(".katex")
-  // Array.from(mathElements).forEach((el) => {
-  //   if (el.textContent) {
-  //     katex.render(el.textContent, el, {
-  //       throwOnError: false,
-  //     })
-  //   }
-  // })
   let frameCount = 0
-  let t0 = 0
+  let t0 = performance.now()
   let totalFailedSamples = 0
 
   function frame(t: DOMHighResTimeStamp): void {
     let result = undefined
     try {
       if (!pause.checked) {
+        console.log('alpha', alpha)
         result = gpu.inference(
           {
             points,
             coefficients: alpha,
-            component_enable: modelEnable,
+            component_enable: new Map().set('polynomial', true).set('foo', true),
           },
           inferenceParameters,
         )
@@ -246,44 +177,34 @@ export default function main(): void {
             stats[j].observe(m.model[j])
           }
         }
-        if (t0 === 0) {
-          t0 = t
-        }
         ++frameCount
-        if (frameCount % 200 === 0) {
-          const fps = Math.trunc(frameCount / ((t - t0) / 1e3))
-          setInnerText("#fps", fps.toString())
-          setInnerText("#ips", `${(result.ips / 1e6).toFixed(1)} M`)
-          frameCount = 0
-          t0 = 0
-        }
-        if (frameCount % 50 === 0) {
-          for (let i = 0; i < MODEL_SIZE; ++i) {
-            const s = stats[i].summarize()
-            setInnerText(
-              `#${params[i].name}_mu-posterior`,
-              s.mu.toFixed(2).toString(),
-            )
-            setInnerText(
-              `#${params[i].name}_sigma-posterior`,
-              s.sigma.toFixed(2).toString(),
-            )
-          }
-        }
-        // const ols = selected_models.map(m => m.p_outlier.toFixed(2).toString()).join(', ')
-        // document.querySelector<HTMLSpanElement>('#p_outlier')!.innerText = ols
+        const fps = Math.trunc(frameCount / ((t - t0) / 1e3))
+        console.log('fps',fps)
         renderer.render(points, result)
-        emptyPosterior.innerText = totalFailedSamples.toString()
+        const info = {
+          totalFailedSamples: totalFailedSamples,
+          ips: result.ips,
+          fps: fps,
+          posterior: stats.map((s, i) => [params[i].name, s.summarize()]),
+        }
+        setInfo(info)
+        // emptyPosterior.innerText = totalFailedSamples.toString()
         if (autoSIR.checked) {
           SIR_Update()
         }
       }
-      //requestAnimationFrame(frame)
+      if (stopAnimation) {
+        console.log('halting animation')
+        return
+      }
+      if (frameCount < 1000) requestAnimationFrame(frame)
     } catch (error) {
       log("error", error)
     }
   }
+  console.log('starting animation')
   requestAnimationFrame(frame)
+  return stop
 }
 
 // try {
