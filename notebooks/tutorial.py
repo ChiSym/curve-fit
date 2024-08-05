@@ -88,7 +88,7 @@ exponential2 = b.Exponential(a=genjax.normal(1.0,0.1), b = genjax.normal(1.0, 0.
  & b.plot_functions(exponential2.sample(100).get_retval()) )
 
 # %% [markdown]
-# Similarly for sinusoidal functions $f(x) = a \sin(2\pi\omega\,(x - \varphi))$.
+# Similarly for sinusoidal functions $f(x) = a \sin(2\pi\omega\,(x + \varphi))$.
 
 # %%
 periodic = b.Periodic(
@@ -353,7 +353,7 @@ import jax.numpy as jnp
 import penzai.pz as pz
 
 # %% [markdown]
-# The `blocks` library is concentrated on a simple $\mathbb{R}\rightarrow\mathbb{R}$ inference problem, localized to the unit square for convenience, as found in the introductory GenJAX notebooks. We provide a "basis" of polynomial, $ae^{bx}$, and $a\sin(2\pi\omega\,(x - \varphi))$ functions, each of whose parameters are drawn from a standard distribution that the user supplies. The intro curve fit task contemplates a polynomial of degree 2 with normally distributed coefficients, which we may write as
+# The `blocks` library is concentrated on a simple $\mathbb{R}\rightarrow\mathbb{R}$ inference problem, localized to the unit square for convenience, as found in the introductory GenJAX notebooks. We provide a "basis" of polynomial, $ae^{bx}$, and $a\sin(2\pi\omega\,(x + \varphi))$ functions, each of whose parameters are drawn from a standard distribution that the user supplies. The intro curve fit task contemplates a polynomial of degree 2 with normally distributed coefficients, which we may write as
 
 # %%
 quadratic = b.Polynomial(max_degree=2, coefficient_d=genjax.normal(0.0, 1.0))
