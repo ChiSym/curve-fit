@@ -42,9 +42,11 @@ class Block:
     def address_segments(self) -> Generator[Tuple, None, None]:
         raise NotImplementedError()
 
+
 @pz.pytree_dataclass
 class BlockFunction(Pytree):
     """A BlockFunction is a Pytree which is also Callable."""
+
     params: FloatArray | tuple[Block]
     function_family: Callable = Pytree.static()
 
@@ -52,7 +54,6 @@ class BlockFunction(Pytree):
         return self.function_family(self.params, x)
 
     def params_grad(self, x: ArrayLike) -> FloatArray:
-        print(f'p {self.params}, x {x}, f(x) {self.function_family(self.params, x)} gr {jax.jacfwd(self.function_family)(self.params, x)}')
         return jax.jacfwd(self.function_family)(self.params, x)
 
 
@@ -96,14 +97,12 @@ class Periodic(Block):
             amplitude, phase, frequency = params.T
             return amplitude * jnp.sin(2 * math.pi * frequency * (x + phase))
 
-
         @genjax.gen
         def periodic_gf() -> BlockFunction:
             params = jnp.array([amplitude @ "a", phase @ "φ", frequency @ "ω"])
             return BlockFunction(params, periodic)
 
         super().__init__(periodic_gf)
-
 
     def address_segments(self):
         yield ("a",)
@@ -150,11 +149,10 @@ class Pointwise(Block):
 
         @genjax.gen
         def pointwise_gf() -> BlockFunction:
-            params = f.gf() @ "l", g.gf() @ "r"
+            params = self.f.gf() @ "l", self.g.gf() @ "r"
             return BlockFunction(params, pointwise)
 
         super().__init__(pointwise_gf)
-
 
     def address_segments(self):
         for s in self.f.address_segments():
@@ -177,11 +175,10 @@ class Compose(Block):
 
         @genjax.gen
         def composite_gf() -> BlockFunction:
-            params = f.gf() @ "l", g.gf() @ "r"
+            params = self.f.gf() @ "l", self.g.gf() @ "r"
             return BlockFunction(params, composition)
 
         super().__init__(composite_gf)
-
 
     def address_segments(self):
         for s in self.f.address_segments():
