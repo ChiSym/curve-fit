@@ -20,8 +20,8 @@ if "google.colab" in sys.modules:
     from google.colab import auth  # pyright: ignore [reportMissingImports]
 
     auth.authenticate_user()
-    %pip install --quiet keyring keyrings.google-artifactregistry-auth  # type: ignore # noqa
-    %pip install --quiet genjax-blocks==0.1.0.post8.dev0+a289d26 --extra-index-url https://us-west1-python.pkg.dev/probcomp-caliban/probcomp/simple/  # type: ignore # noqa
+    # %pip install --quiet keyring keyrings.google-artifactregistry-auth  # type: ignore # noqa
+    # %pip install --quiet genjax-blocks==0.1.0.post8.dev0+a289d26 --extra-index-url https://us-west1-python.pkg.dev/probcomp-caliban/probcomp/simple/  # type: ignore # noqa
 
 # %% [markdown]
 # # Curve fitting via distributions and inference
@@ -124,14 +124,14 @@ functools.reduce(lambda a, b: a & b, [
 # Operators `+` ("sum"), `*` ("product"), `@` ("composite") take two distributions over curves and produce a new one.  The new distribution first draws sample curves from the two operand distributions, then returns as its sample the curve whose function is the pointwise sum, pointwise product, or composite function of the two drawn curves.
 
 # %%
-wiggly_arc = quadratic + periodic
+wiggly_line = linear + periodic
 zap = exponential * (periodic @ exponential)
 
 # %%
 # plot...
 functools.reduce(lambda a, b: a & b, [
     b.plot_functions(f.sample(25).get_retval())
-    for f in [wiggly_arc, zap]
+    for f in [wiggly_line, zap]
 ])
 
 
