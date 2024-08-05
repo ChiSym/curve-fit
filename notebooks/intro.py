@@ -53,6 +53,12 @@ p.get_choices()
 # %%
 p.get_retval()(0.0)
 
+# %%
+ps = quadratic.sample(n=1)
+ps.get_retval()
+
+# %%
+ps.get_retval().params_grad(3.0)
 # %% [markdown]
 # You may have noticed an extra layer of brackets around the polynomial's coefficients and its return value. This is the magic of JAX: sampling from a block produces an "array BlockFunction". Such an array of functions, when presented with an argument, will return an array of values (one for each function evaluated at that single argument.)
 #
@@ -87,6 +93,7 @@ def plot_priors(B: b.Block, n: int, **kwargs):
 
 plot_priors(quadratic, 100)
 
+
 # %% [markdown]
 # We can do the same for our Periodic and Exponential distributions:
 
@@ -94,7 +101,7 @@ plot_priors(quadratic, 100)
 periodic = b.Periodic(
     amplitude=genjax.beta(2.0, 5.0),
     phase=genjax.uniform(0.0, 1.0),
-    period=genjax.normal(1.0, 1.0),
+    frequency=genjax.normal(5.0, 1.0),
 )
 
 exponential = b.Exponential(a=genjax.normal(0.0, 1.0), b=genjax.normal(0.0, 1.0))
@@ -107,10 +114,11 @@ plot_priors(exponential, 50)
 
 # %% [markdown]
 # `Block` objects support the pointwise operations $+, *$ as well as `@` (function composition). Vikash's favorite ascending-periodic function might be modeled by the sum of a polynomial and a periodic function which we can write simply as $P+Q$:
+# %%
+(quadratic + periodic).sample(2).get_retval()
 
 # %%
 plot_priors(quadratic + periodic, 15)
-
 # %% [markdown]
 # It does seem like the goal function lies in the span of the prior distribution in this case. (I pause here to note that pointwise binary operations in `Block` are not commutative as you might expect, because the randomness supplied by `sample` is injected left to right).
 #
@@ -172,7 +180,6 @@ def plot_posterior(tr: genjax.Trace, xs: FloatArray, ys: FloatArray, **kwargs):
 # %%
 tr = curve_fit.importance_sample(xs, ys, 4000, 25)
 plot_posterior(tr, xs, ys)
-
 # %% [markdown]
 # This is an excellent result, thanks to GenJAX, and I think indicative of what can be done with a DSL to temporarily shift the focus away from the nature of JAX. In this version of the model, the inlier sigma and probability were inference parameters of the model. Let's examine the distributions found by this inference:
 # Maybe we can stretch to accommodate a periodic sample:

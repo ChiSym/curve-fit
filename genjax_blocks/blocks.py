@@ -18,7 +18,7 @@ class Block:
     trees of a fixed shape. Blocks may be sampled to generate BlockFunctions
     from the underlying distribution."""
 
-    gf: GenerativeFunctionClosure
+    gf: GenerativeFunction
     jitted_sample: Callable
 
     def __init__(self, gf):
@@ -45,39 +45,43 @@ class Block:
 @pz.pytree_dataclass
 class BlockFunction(Pytree):
     """A BlockFunction is a Pytree which is also Callable."""
-    function_family: Callable
-
-    def __init__(self, function_family, params):
-        self.function_family = function_family
-        self.params = params
+    params: FloatArray | tuple[Block]
+    function_family: Callable = Pytree.static()
 
     def __call__(self, x: ArrayLike) -> FloatArray:
-        return self.function_family(*self.params, x)
-    
+        return self.function_family(self.params, x)
+
     def params_grad(self, x: ArrayLike) -> FloatArray:
-        return jax.jacfwd(lambda params, x: self.function_family(*params, x))(self.params, x)
+        print(f'p {self.params}, x {x}, f(x) {self.function_family(self.params, x)} gr {jax.jacfwd(self.function_family)(self.params, x)}')
+        return jax.jacfwd(self.function_family)(self.params, x)
 
 
 class Polynomial(Block):
     def __init__(self, *, max_degree: int, coefficient_d: GenerativeFunctionClosure):
-        def polynomial(coeffs, x):
-            deg = coeffs.shape[-1]
+        def polynomial(params, x):
+            deg = params.shape[-1]
             # tricky: we don't want pow to act like a binary operation between two
             # arrays of the same shape; instead, we want it to take each element
             # of the LHS and raise it to each of the powers in the RHS. So we convert
             # the LHS into an (N, 1) shape.
             powers = jnp.pow(jnp.array(x)[jnp.newaxis].T, jnp.arange(deg))
-            return powers @ coeffs.T
+            return powers @ params.T
+
+        # This trampoline from GenerativeFunctionClosure to GenerativeFunction is required
+        # because of GEN-420 (or so it is conjectured)
+        @genjax.gen
+        def coef():
+            return coefficient_d @ "coefficients"
 
         @genjax.gen
         def polynomial_gf() -> BlockFunction:
-            params = coefficient_d.repeat(n=max_degree + 1)() @ "coefficients"
-            return BlockFunction(polynomial, params)
+            params = coef.repeat(n=max_degree+1)() @ "p"
+            return BlockFunction(params, polynomial)
 
-        super().__init__(polynomial_gf())
+        super().__init__(polynomial_gf)
 
     def address_segments(self):
-        yield ("coefficients", ...)
+        yield ("p", ..., "coefficient")
 
 
 class Periodic(Block):
@@ -88,15 +92,18 @@ class Periodic(Block):
         phase: GenerativeFunctionClosure,
         frequency: GenerativeFunctionClosure,
     ):
-        def periodic(amplitude, phase, frequency, x):
+        def periodic(params, x):
+            amplitude, phase, frequency = params.T
             return amplitude * jnp.sin(2 * math.pi * frequency * (x + phase))
+
 
         @genjax.gen
         def periodic_gf() -> BlockFunction:
-            params = (amplitude @ "a", phase @ "φ", frequency @ "ω")
-            return BlockFunction(periodic, params)
+            params = jnp.array([amplitude @ "a", phase @ "φ", frequency @ "ω"])
+            return BlockFunction(params, periodic)
 
-        super().__init__(periodic_gf())
+        super().__init__(periodic_gf)
+
 
     def address_segments(self):
         yield ("a",)
@@ -105,16 +112,18 @@ class Periodic(Block):
 
 
 class Exponential(Block):
+
     def __init__(self, *, a: GenerativeFunctionClosure, b: GenerativeFunctionClosure):
-        def exponential(a, b, x):
+        def exponential(params, x):
+            a, b = params.T
             return a * jnp.exp(b * x)
 
         @genjax.gen
         def exponential_gf() -> BlockFunction:
-            params = (a @ "a", b @ "b")
-            return BlockFunction(exponential, params)
+            params = jnp.array([a @ "a", b @ "b"])
+            return BlockFunction(params, exponential)
 
-        super().__init__(exponential_gf())
+        super().__init__(exponential_gf)
 
     def address_segments(self):
         yield ("a",)
@@ -133,16 +142,19 @@ class Pointwise(Block):
     ):
         self.f = f
         self.g = g
+        self.op = op
 
-        def pointwise(params_f, params_g, x):
-            return op(f(params_f, x), g(params_g, x))
+        def pointwise(params, x):
+            block_f, block_g = params
+            return self.op(block_f(x), block_g(x))
 
         @genjax.gen
         def pointwise_gf() -> BlockFunction:
-            params = (f.gf @ "l", g.gf @ "r")
-            return BlockFunction(pointwise, params)
+            params = f.gf() @ "l", g.gf() @ "r"
+            return BlockFunction(params, pointwise)
 
-        super().__init__(pointwise_gf())
+        super().__init__(pointwise_gf)
+
 
     def address_segments(self):
         for s in self.f.address_segments():
@@ -159,15 +171,17 @@ class Compose(Block):
         self.f = f
         self.g = g
 
-        def composite(params_f, params_g, x):
-            return f(params_f, g(params_g, x))
+        def composition(params, x):
+            block_f, block_g = params
+            return block_f(block_g(x))
 
         @genjax.gen
         def composite_gf() -> BlockFunction:
-            params = (f.gf @ "l", g.gf @ "r")
-            return BlockFunction(composite, params)
+            params = f.gf() @ "l", g.gf() @ "r"
+            return BlockFunction(params, composition)
 
-        super().__init__(composite_gf())
+        super().__init__(composite_gf)
+
 
     def address_segments(self):
         for s in self.f.address_segments():
@@ -217,7 +231,7 @@ class CurveFit:
 
         @genjax.gen
         def model(xs: FloatArray) -> FloatArray:
-            c = curve.gf @ "curve"
+            c = curve.gf() @ "curve"
             sigma_in = sigma_inlier @ "sigma_inlier"
             p_out = p_outlier @ "p_outlier"
             return kernel(xs, c, sigma_in, p_out) @ "ys"
