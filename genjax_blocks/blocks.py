@@ -23,17 +23,17 @@ class Block:
     gf: GenerativeFunction
     jitted_sample: Callable
 
-    def __init__(self, block_name, params_distribution, function_family):
+    def __init__(self, params_distribution, function_family):
         self.params_distribution = params_distribution
         self.function_family = function_family
 
         @genjax.gen
         def gf():
-            params = params_distribution() @ block_name
+            params = params_distribution() @ "params"
             return BlockFunction(params, function_family)
-        self.gf = gf       
+        self.gf = gf
         self.jitted_sample = jax.jit(gf.simulate)
-    
+
     def sample(self, n: int = 1, k: PRNGKey = jax.random.PRNGKey(0)):
         return jax.vmap(self.jitted_sample, in_axes=(0, None))(
             jax.random.split(k, n), ()
@@ -87,10 +87,10 @@ class Polynomial(Block):
             powers = jnp.pow(jnp.array(x)[jnp.newaxis].T, jnp.arange(deg))
             return powers @ params.T
 
-        super().__init__("polynomial", params_distribution, function_family)
+        super().__init__(params_distribution, function_family)
 
     def address_segments(self):
-        yield ("polynomial", "p", ..., "coefficient")
+        yield ("p", ..., "coefficient")
 
 
 class Periodic(Block):
@@ -109,12 +109,12 @@ class Periodic(Block):
             amplitude, phase, frequency = params.T
             return amplitude * jnp.sin(2 * math.pi * frequency * (x + phase))
 
-        super().__init__("periodic", params_distribution, function_family)
+        super().__init__(params_distribution, function_family)
 
     def address_segments(self):
-        yield ("periodic", "a")
-        yield ("periodic", "φ")
-        yield ("periodic", "ω")
+        yield ("a",)
+        yield ("φ",)
+        yield ("ω",)
 
 
 class Exponential(Block):
@@ -127,11 +127,11 @@ class Exponential(Block):
             a, b = params.T
             return a * jnp.exp(b * x)
 
-        super().__init__("exponential", params_distribution, function_family)
+        super().__init__(params_distribution, function_family)
 
     def address_segments(self):
-        yield ("exponential", "a")
-        yield ("exponential", "b")
+        yield ("a",)
+        yield ("b",)
 
 
 class Pointwise(Block):
@@ -155,13 +155,13 @@ class Pointwise(Block):
             params_f, params_g = params
             return op(f.function_family(params_f, x), g.function_family(params_g, x))
 
-        super().__init__("pointwise", params_distribution, function_family)
+        super().__init__(params_distribution, function_family)
 
     def address_segments(self):
         for s in self.f.address_segments():
-            yield ("pointwise", "l") + s
+            yield ("l",) + s
         for s in self.g.address_segments():
-            yield ("pointwise", "r") + s
+            yield ("r",) + s
 
 
 class Compose(Block):
@@ -180,13 +180,13 @@ class Compose(Block):
             params_f, params_g = params
             return f.function_family(params_f, g.function_family(params_g, x))
 
-        super().__init__("compose", params_distribution, function_family)
+        super().__init__(params_distribution, function_family)
 
     def address_segments(self):
         for s in self.f.address_segments():
-            yield ("compose", "l") + s
+            yield ("l",) + s
         for s in self.g.address_segments():
-            yield ("compose", "r") + s
+            yield ("r",) + s
 
 
 class CurveFit:
@@ -238,7 +238,7 @@ class CurveFit:
         self.gf = model
         self.curve = curve
         self.jitted_importance = jax.jit(self.gf.importance)
-        self.coefficient_paths = [("curve",) + p for p in self.curve.address_segments()]
+        self.coefficient_paths = [("curve", "params") + p for p in self.curve.address_segments()]
         self.categorical_sampler = jax.jit(genjax.categorical.sampler)
 
     def importance_sample(
@@ -269,6 +269,7 @@ class CurveFit:
         # globalize the indices by adding back the index of the start of each batch.
         winners += jnp.arange(0, N * K, N)
         return jax.tree.map(lambda x: x[winners], samples)
+
 
 def plot_functions(fns: BlockFunction, winningIndex=None, **kwargs):
     xs = jnp.linspace(-1, 1, 40)
