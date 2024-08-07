@@ -106,15 +106,15 @@ b.plot_functions(periodic.sample(25).get_retval())
 
 # %%
 # Colin: do we care that quadratic has a different coeff std.dev.?
+constant = b.Polynomial(max_degree=0, coefficient_d=genjax.normal(0.0, 2.0))
 linear = b.Polynomial(max_degree=1, coefficient_d=genjax.normal(0.0, 2.0))
-quadratic = b.Polynomial(max_degree=2, coefficient_d=genjax.normal(0.0, 1.0))
+quadratic = b.Polynomial(max_degree=2, coefficient_d=genjax.normal(0.0, 2.0))
 cubic = b.Polynomial(max_degree=3, coefficient_d=genjax.normal(0.0, 2.0))
+quartic = b.Polynomial(max_degree=4, coefficient_d=genjax.normal(0.0, 2.0))
 
-# plot...
-# %%
 functools.reduce(lambda a, b: a & b, [
     b.plot_functions(f.sample(25).get_retval())
-    for f in [linear, quadratic, cubic]
+    for f in [constant, linear, quadratic, cubic, quartic]
 ])
 # %% [markdown]
 # ### Combining distributions over curves
@@ -125,15 +125,13 @@ functools.reduce(lambda a, b: a & b, [
 
 # %%
 wiggly_line = linear + periodic
+swoosh = periodic @ quadratic
 zap = exponential * (periodic @ exponential)
 
-# %%
-# plot...
 functools.reduce(lambda a, b: a & b, [
     b.plot_functions(f.sample(25).get_retval())
-    for f in [wiggly_line, zap]
+    for f in [wiggly_line, swoosh, zap]
 ])
-
 
 # %% [markdown]
 # ## Fitting curves to data: optimization
@@ -142,7 +140,7 @@ functools.reduce(lambda a, b: a & b, [
 #
 # We are going to work in a context where the fit is not exact, only approximate.  Maybe there does not exist an exact fit, such as an overdetermined system.  Or there is one, and finding it exactly is computationally out of reach.  Or we can find one, possibly many fits, but they are all rather unlikely or wackly, like an extremely high-degree polynomial to approximate periodic data.
 #
-# In another light, only expecting an approximate fit is asking for something weaker, and is a simplifying relaxation of the problem.
+# In another light, only expecting an approximate fit is asking for something weaker, and is a *simplifying* relaxation of the problem.
 
 # %% [markdown]
 # ### Noisy curves
@@ -159,7 +157,7 @@ functools.reduce(lambda a, b: a & b, [
 #
 # Suppose we are trying to fit data $(\vec x_i,\vec y_i)$ for $i=1,\ldots,N$ where the $\vec x_i,\vec y_i$ are vectors, using a linear equation $\vec y = M \vec x + \vec b$ where $M$ is a matrix and $\vec b$ is a vector.  When $N$ is large and the system is overdetermined, how do we make sense of the situation?
 #
-# A common answer is to choose the $M$ and $\vec b$ that minimize the sum of the squared errors $\sum_{i=1}^N \|M\vec x_i + \vec b - \vec y_i\|^2$.  With a little elbow grease, this can be explicitly solved.
+# A common answer is to choose the $M$ and $\vec b$ that minimize the sum of the squared errors $\sum_{i=1}^N \|M\vec x_i + \vec b - \vec y_i\|^2$.  With a little elbow grease, this can be explicitly solved, and libraries do it for us.
 
 # %%
 # TODO: choose better points?
@@ -202,7 +200,7 @@ ys = (
 # Form the matrix whose rows are the power-vectors [1, x_i, x_i**2, ..., x_i**d]...
 def powers_vector(x, max_degree):
     return jnp.pow(jnp.array(x)[jnp.newaxis].T, jnp.arange(max_degree + 1))
-# ...with d=4 (quartic)
+# ...with max_degree=4 (quartic)
 xs_powers = powers_vector(xs, 4)
 
 # Find the least squares fit to the system of equations
