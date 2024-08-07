@@ -322,3 +322,165 @@ def plot_functions(fns: BlockFunction, winningIndex=None, **kwargs):
         Plot.domain([-1, 1]),
         {"clip": True, "height": 400, "width": 400},
     )
+
+
+class DataModel:
+    params_distribution: GenerativeFunction
+    kernel: GenerativeFunction
+    gf: GenerativeFunction
+    jitted_sample: Callable
+
+    def __init__(self, params_distribution, kernel):
+        self.params_distribution = params_distribution
+        self.kernel = kernel
+
+        @genjax.gen
+        def gf(ys_latent: ArrayLike) -> FloatArray:
+            params = params_distribution() @ "kernel_params"
+            return kernel.vmap(in_axes=(0, None))(ys_latent, params) @ "kernel"
+        self.gf = gf
+        self.jitted_sample = jax.jit(gf.simulate)
+
+    def sample(self, ys_latent: ArrayLike, n: int = 1, k: PRNGKey = jax.random.PRNGKey(0)):
+        return jax.vmap(
+            self.jitted_sample, in_axes=(0, None)
+        )(
+            jax.random.split(k, n), (ys_latent,)
+        )
+
+    def constraint_from_params(self, params):
+        return NotImplementedError()
+
+    def constraint_from_samples(self, samples):
+        return NotImplementedError()
+
+
+class NoisyData(DataModel):
+    def __init__(self, *, sigma_inlier: GenerativeFunctionClosure):
+        @genjax.gen
+        def params_distribution():
+            return sigma_inlier @ "σ_inlier"
+
+        @genjax.gen
+        def kernel(
+            y_latent: ArrayLike,
+            params: ArrayLike
+        ) -> FloatArray:
+            sigma_in = params
+            return genjax.normal(y_latent, sigma_in) @ "y"
+
+        super().__init__(params_distribution, kernel)
+
+    def constraint_from_params(self, params):
+        sigma_in = params
+        return C.d({"σ_inlier": sigma_in})
+
+    def constraint_from_samples(self, samples):
+        y = samples
+        return C.d({"y": y})
+
+
+class NoisyOutliersData(DataModel):
+    def __init__(self, *, sigma_inlier: GenerativeFunctionClosure, p_outlier: GenerativeFunctionClosure):
+        @genjax.gen
+        def params_distribution():
+            sigma_in = sigma_inlier @ "σ_inlier"
+            p_out = p_outlier @ "p_outlier"
+            return (sigma_in, p_out)
+
+        @genjax.gen
+        def kernel(
+            y_latent: ArrayLike,
+            params: Tuple
+        ) -> FloatArray:
+            sigma_in, p_out = params
+
+            inlier_model = genjax.normal(y_latent, sigma_in)
+            outlier_model = genjax.uniform(-1.0, 1.0)
+            branch_model = outlier_model.or_else(inlier_model)
+
+            is_outlier = jnp.bool_(genjax.flip(p_out) @ "outlier")
+            return branch_model(is_outlier, (), ()) @ "y"
+
+        super().__init__(params_distribution, kernel)
+
+    def constraint_from_params(self, params):
+        sigma_in, p_out = params
+        return C.d({"σ_inlier": sigma_in, "p_outlier": p_out})
+
+    def constraint_from_samples(self, samples):
+        outlier, y = samples
+        return C.d({"outlier": outlier, "y": y})
+
+
+categorical_sampler = jax.jit(genjax.categorical.sampler)
+
+class CurveDataModel:
+    curve: Block
+    data_model: DataModel
+    gf: GenerativeFunction
+    jitted_sample: Callable
+    jitted_importance: Callable
+    coefficient_paths: List[Tuple]
+
+    def __init__(self, curve, data_model):
+        self.curve = curve
+        self.data_model = data_model
+
+        @genjax.gen
+        def gf(xs):
+            c = curve.gf() @ "curve"
+            return data_model.gf(c(xs)) @ "data"
+        self.gf = gf
+        self.jitted_sample = jax.jit(gf.simulate)
+        self.jitted_importance = jax.jit(gf.importance)
+
+        self.coefficient_paths = [("curve", "curve_params") + p for p in curve.address_segments()]
+
+    def sample(self, n: int = 1, k: PRNGKey = jax.random.PRNGKey(0)):
+        return jax.vmap(
+            self.jitted_sample, in_axes=(0, None)
+        )(
+            jax.random.split(k, n), ()
+        )
+
+    def importance_resample(
+        self,
+        xs: FloatArray,
+        ys: FloatArray,
+        N: int,
+        K: int,
+        key: PRNGKey = jax.random.PRNGKey(0),
+    ):
+        """Generate $K$ importance samples from the curves fitted to $xs, ys$.
+        Each sample will be drawn from a separate weighted categorical distribution
+        of $N$ importance samples (so that $NK$ samples are taken overall)."""
+        key1, key2 = jax.random.split(key)
+
+        constraint = C["data", "kernel", jnp.arange(len(ys)), "y"].set(ys)
+        samples, log_weights = jax.vmap(
+            self.jitted_importance, in_axes=(0, None, None)
+        )(
+            jax.random.split(key1, N * K), constraint, (xs,)
+        )
+
+        # reshape the samples in to K batches of size N
+        log_weights = log_weights.reshape((K, N))
+        winners = jax.vmap(categorical_sampler)(
+            jax.random.split(key2, K), log_weights
+        )
+        # indices returned are relative to the start of the batch from which they were drawn.
+        # globalize the indices by adding back the index of the start of each batch.
+        winners += jnp.arange(0, N * K, N)
+
+        return jax.tree.map(lambda x: x[winners], samples)
+
+    def log_density(self, curve_params, kernel_params, xs, samples):
+        constraint = C.d({
+            "curve": C.d({"curve_params": self.curve.constraint_from_params(curve_params)}),
+            "data": C.d({
+                "kernel_params": self.data_model.constraint_from_params(kernel_params),
+                "kernel": C[jnp.arange(len(samples))].set(self.data_model.constraint_from_samples(samples))
+            })
+        })
+        return self.gf.assess(constraint, (xs,))[0]

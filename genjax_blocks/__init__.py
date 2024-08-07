@@ -8,6 +8,10 @@ from .blocks import (
     Periodic,
     Polynomial,
     plot_functions,
+    DataModel,
+    NoisyData,
+    NoisyOutliersData,
+    CurveDataModel,
 )
 
 __all__ = [
@@ -18,6 +22,10 @@ __all__ = [
     "Polynomial",
     "Exponential",
     "plot_functions",
+    "DataModel",
+    "NoisyData",
+    "NoisyOutlierData",
+    "CurveDataModel",
 ]
 
 __version__ = metadata.version("genjax-blocks")
