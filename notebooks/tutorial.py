@@ -215,10 +215,45 @@ Plot.new([
 # The exact solution of least squares breaks down in the non-linear setting, however: the reader is invited to struggle with adapting it to fitting sinusoidal curves to data!  It is then common to approximately optimize the sum-squared error using *gradient descent*.
 #
 # Conveniently, the log density of a sample $(y_i)_i$ under one or our noisy curve distributions is the sum of the corresponding log normal densities of the $y_i$, which are in turn proportional to the squared errors $(f(x_i)-y_i)^2$.  Thus optimizing the log density of a dataset under this distribution *for varying curves* is equivalent to optimizing the sum-squared error.
+#
+# Let's try to fit the following points with a member of the exponential family.
 
 # %%
-# Work through an example
-# Requires feeding automatic differentiation through Blocks
+nonlinear_sample_curve = exponential.sample(k=jax.random.PRNGKey(1)).get_retval()
+params_latent = nonlinear_sample_curve.params[0]
+print(f"Latent parameters: [a, b] = {params_latent}")
+ys_latent = nonlinear_sample_curve(xs)
+
+ys_observed = noisy_data_model.sample(ys_latent).get_retval()[0]
+
+Plot.new([
+    Plot.line(list(zip(xs, ys_latent))),
+    Plot.dot(list(zip(xs, ys_observed))),
+])
+
+# %%
+joint_model = b.CurveDataModel(exponential, noisy_data_model)
+
+a_guess, b_guess = -1.0, -1.0
+params_guess = jnp.array([a_guess, b_guess])
+
+sigma_in = 0.05
+jitted_grad = jax.jit(jax.jacfwd(lambda params: joint_model.log_density(params, sigma_in, xs, ys_observed)))
+
+learning_rate = 1e-5
+params_optimized = params_guess
+N_steps = 1000
+for _ in range(N_steps):
+    grad = jitted_grad(params_optimized)
+    params_optimized = params_optimized + learning_rate * grad
+
+curve_optimized = exponential.curve_from_params(params_optimized)
+ys_optimized = curve_optimized(xs)
+
+Plot.new([
+    Plot.line(list(zip(xs, ys_optimized))),
+    Plot.dot(list(zip(xs, ys_observed))),
+])
 
 # %% [markdown]
 # ### The problem of outliers
