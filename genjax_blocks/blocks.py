@@ -6,7 +6,7 @@ import genjax
 from penzai import pz
 import jax.numpy as jnp
 import jax.random
-from genjax import Pytree
+from genjax import Pytree, ChoiceMapBuilder as C
 from genjax.core import GenerativeFunctionClosure, GenerativeFunction
 from genjax.typing import Callable, FloatArray, PRNGKey, ArrayLike, Tuple, List
 import genstudio.plot as Plot
@@ -38,6 +38,12 @@ class Block:
         return jax.vmap(self.jitted_sample, in_axes=(0, None))(
             jax.random.split(k, n), ()
         )
+
+    def constraint_from_params(self, params):
+        return NotImplementedError()
+
+    def curve_from_params(self, params):
+        return self.gf.assess(C["curve_params"].set(self.constraint_from_params(params)), ())[1]
 
     def __add__(self, b: "Block"):
         return Pointwise(self, b, jnp.add)
@@ -89,6 +95,9 @@ class Polynomial(Block):
 
         super().__init__(params_distribution, function_family)
 
+    def constraint_from_params(self, params):
+        return C["p", jnp.arange(len(params)), "coefficient"].set(params)
+
     def address_segments(self):
         yield ("p", ..., "coefficient")
 
@@ -111,6 +120,10 @@ class Periodic(Block):
 
         super().__init__(params_distribution, function_family)
 
+    def constraint_from_params(self, params):
+        amplitude, phase, frequency = params.T
+        return C.d({"a": amplitude, "φ": phase, "ω": frequency})
+
     def address_segments(self):
         yield ("a",)
         yield ("φ",)
@@ -128,6 +141,10 @@ class Exponential(Block):
             return a * jnp.exp(b * x)
 
         super().__init__(params_distribution, function_family)
+
+    def constraint_from_params(self, params):
+        a, b = params.T
+        return C.d({"a": a, "b": b})
 
     def address_segments(self):
         yield ("a",)
@@ -157,6 +174,13 @@ class Pointwise(Block):
 
         super().__init__(params_distribution, function_family)
 
+    def constraint_from_params(self, params):
+        params_f, params_g = params
+        return C.d({
+            "l": self.f.constraint_from_params(params_f),
+            "r": self.g.constraint_from_params(params_g)
+        })
+
     def address_segments(self):
         for s in self.f.address_segments():
             yield ("l",) + s
@@ -181,6 +205,13 @@ class Compose(Block):
             return f.function_family(params_f, g.function_family(params_g, x))
 
         super().__init__(params_distribution, function_family)
+
+    def constraint_from_params(self, params):
+        params_f, params_g = params
+        return C.d({
+            "l": self.f.constraint_from_params(params_f),
+            "r": self.g.constraint_from_params(params_g)
+        })
 
     def address_segments(self):
         for s in self.f.address_segments():
