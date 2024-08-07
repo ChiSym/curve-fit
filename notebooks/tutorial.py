@@ -152,6 +152,20 @@ functools.reduce(lambda a, b: a & b, [
 # %%
 # Example of some NoisyCurve samples = finite point sets, drawn from a single curve at a time
 
+xs = jnp.linspace(-0.7, 0.7, 10)
+
+sample_curve = quartic.sample(k=jax.random.PRNGKey(134)).get_retval()
+ys_latent = sample_curve(xs)
+
+noisy_data_model = b.NoisyData(sigma_inlier=genjax.uniform(0.0, 0.1))
+noisy_ys_samples = noisy_data_model.sample(ys_latent, 12)
+print(f"sigma_in values: {noisy_ys_samples.get_choices()["kernel_params", "σ_inlier"]}")
+noisy_ys_values = noisy_ys_samples.get_retval()
+
+Plot.new(
+    [Plot.line(list(zip(xs, ys_latent)))] +
+    [Plot.dot(list(zip(xs, ys)), stroke=i) for i, ys in enumerate(noisy_ys_values)])
+
 # %% [markdown]
 # ### Classic technique: least squares
 #
