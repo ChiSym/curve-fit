@@ -176,21 +176,19 @@ Plot.new(
 # %%
 ys = noisy_ys_values[0]
 
-# Reform the xs = [..., x_i, ...] into a matrix whose rows are the augmented vectors [x_i, 1].
-xs_augmented = jnp.vstack([xs, jnp.ones(len(xs))]).T
+# First, reform the xs = [..., x_i, ...] into a matrix whose rows are the augmented vectors [1, x_i].
+xs_augmented = jnp.vstack([jnp.ones(len(xs)), xs]).T
 
 # Find the least squares fit to the system of equations
-# [m, b] dot [x_i, 1] == m x_i + b == y_i.
-m, y0 = jnp.linalg.lstsq(xs_augmented, ys)[0]
-# calling it `b` overwrites `import genjax_blocks as b` so have to change one or the oher
+# [c0, c1] dot [1, x_i] == c0 + c1 x_i == y_i.
+c0, c1 = jnp.linalg.lstsq(xs_augmented, ys)[0]
+line = lambda x: c0 + c1*x
 
-# TODO: plot (xs,ys), plus the line y = m*x+b
-m, y0
-# %%
-line = lambda x: m*x + y0
-Plot.new(
-    [Plot.dot(zip(xs, ys)), Plot.line([[xs[0], line(xs[0])], [xs[-1],line(xs[-1])]])]
-)
+graph_xs = jnp.array([xs[0], xs[-1]])
+Plot.new([
+    Plot.dot(list(zip(xs, ys))),
+    Plot.line(list(zip(graph_xs, line(graph_xs))))
+])
 # %% [markdown]
 # Sometimes least squares fitting may be hijacked to solve other problems.  For instance, suppose we wanted to fit a polynomial curve of fixed degree $d$ to some data $(x_i,y_i)$ for $i=1,\ldots,N$.  The right hand side of the desired equation $y = a_d x^d + a_{d-1} x^{d-1} + \cdots + a_1 x + a_0$ may be a polynomial in $x$, but it is a *linear function of the powers of $x$*.  Therefore we can perform least squares fitting on the data $(\vec x_i,y_i)$ where $\vec x_i$ is the vector of powers of $x_i$.
 
@@ -204,43 +202,13 @@ xs_powers = powers_vector(xs, 4)
 # Find the least squares fit to the system of equations
 # [c_0, c_1, ..., c_d] dot [1, x_i, x_i**2, ..., x_i**d] == c_0 + c_1 * x_i + c_2 * x_i**2 + ... + c_d * x_i**d == y_i.
 cs = jnp.linalg.lstsq(xs_powers, ys)[0]
-
-# TODO: plot (xs,ys) plus the polynomial y = (coeffs = ms)(x).
-cs
-# %%
-moar_xs = jnp.linspace(xs[0], xs[-1], 3 * xs.shape[0])
-pts = zip(moar_xs, powers_vector(moar_xs,4) @ cs)
-Plot.new(
-    [Plot.dot(list(zip(xs, ys))), Plot.line(list(pts))]
-)
-# %%
-# an experiment with differentiation
 poly_f = lambda x: powers_vector(x, 4) @ cs
-poly_fp = jax.grad(poly_f)
-# We can't apply poly_fp directly to moar_xs, as grad only works on a function returning
-# a scalar. However, we can vmap the gradient over the points to get the result we want.
-Plot.new(
-    [Plot.line(list(zip(moar_xs, poly_f(moar_xs)))),
-     Plot.line(list(zip(moar_xs, jax.vmap(poly_fp)(moar_xs))))]
-)
-# %%
-# can we differentiate one of our curves?
-sine = b.Periodic(
-    amplitude=genjax.normal(0.4, 0.1),
-    phase=genjax.normal(0.0, 0.001),
-    frequency=genjax.normal(2.0, 0.1),
-)
 
-# We can't use jax.grad because that requires a scalar-valued function.
-# But we can use the Jacobian!
-sines = sine.sample(20).get_retval()
-b.plot_functions(sines) & b.plot_functions(jax.jacfwd(sines))
-#
-
-# %%
-b.plot_functions(jax.jacfwd(sines))
-#jax.vmap(jax.jacfwd(sines))(xs)[:,0]
-
+graph_xs = jnp.linspace(xs[0], xs[-1], 3 * xs.shape[0])
+Plot.new([
+    Plot.dot(list(zip(xs, ys))),
+    Plot.line(list(zip(graph_xs, poly_f(graph_xs))))
+])
 # %% [markdown]
 # ### Gradient descent via noisy curves
 #
