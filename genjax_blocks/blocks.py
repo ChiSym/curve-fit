@@ -29,13 +29,15 @@ class Block:
 
         @genjax.gen
         def gf():
-            params = params_distribution() @ "params"
+            params = params_distribution() @ "curve_params"
             return BlockFunction(params, function_family)
         self.gf = gf
         self.jitted_sample = jax.jit(gf.simulate)
 
     def sample(self, n: int = 1, k: PRNGKey = jax.random.PRNGKey(0)):
-        return jax.vmap(self.jitted_sample, in_axes=(0, None))(
+        return jax.vmap(
+            self.jitted_sample, in_axes=(0, None)
+        )(
             jax.random.split(k, n), ()
         )
 
