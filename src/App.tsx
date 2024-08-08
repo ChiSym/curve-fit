@@ -46,7 +46,7 @@ export default function CurveFit() {
   )
 
   const [componentEnable, setComponentEnable] = useState(
-    new Map().set('polynomial', true).set('periodic', true)
+    new Map().set("polynomial", true).set("periodic", true),
   )
 
   const [ips, setIps] = useState(0.0)
@@ -157,9 +157,12 @@ export default function CurveFit() {
         <div className="column">
           <ModelComponent
             name="polynomial"
-            enabled={componentEnable.get('polynomial')}
-            onChange={e => {
-              const ce = new Map(componentEnable.entries()).set('polynomial', e.target.checked)
+            enabled={componentEnable.get("polynomial")}
+            onChange={(e) => {
+              const ce = new Map(componentEnable.entries()).set(
+                "polynomial",
+                e.target.checked,
+              )
               setComponentEnable(ce)
               animatorRef.current.setComponentEnable(ce)
             }}
@@ -193,9 +196,12 @@ export default function CurveFit() {
         <div className="column">
           <ModelComponent
             name="periodic"
-            enabled={componentEnable.get('periodic')}
-            onChange={e => {
-              const ce = new Map(componentEnable.entries()).set('periodic', e.target.checked)
+            enabled={componentEnable.get("periodic")}
+            onChange={(e) => {
+              const ce = new Map(componentEnable.entries()).set(
+                "periodic",
+                e.target.checked,
+              )
               setComponentEnable(ce)
               animatorRef.current.setComponentEnable(ce)
             }}
@@ -225,8 +231,8 @@ export default function CurveFit() {
             id="pause"
             type="checkbox"
             onChange={(e) => animatorRef.current.setPause(e.target.checked)}
-            />
-            pause
+          />
+          pause
         </label>
         &nbsp;&nbsp;
         <label>
@@ -234,8 +240,8 @@ export default function CurveFit() {
             id="auto-SIR"
             type="checkbox"
             onChange={(e) => animatorRef.current.setAutoSIR(e.target.checked)}
-            />
-            Auto-SIR
+          />
+          Auto-SIR
         </label>
       </div>
       <div className="card">
