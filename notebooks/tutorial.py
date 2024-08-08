@@ -228,7 +228,7 @@ ys_latent = nonlinear_sample_curve(xs)
 ys_observed = noisy_data_model.sample(ys_latent).get_retval()[0]
 
 Plot.new([
-    Plot.line(list(zip(xs, ys_latent))),
+    Plot.line(list(zip(xs, ys_latent)), strokeDasharray="7"),
     Plot.dot(list(zip(xs, ys_observed))),
 ])
 
