@@ -41,7 +41,6 @@ export class Animator {
   private totalFailedSamples = 0
   private t0: DOMHighResTimeStamp = performance.now()
 
-
   // TODO: define type ModelParameters as Map<string, Distribution>; change signature of inference
   // engine code to take multiple parameters, giving up old name
 
@@ -88,6 +87,12 @@ export class Animator {
     this.componentEnable = new Map(componentEnable.entries())
   }
 
+  public getPosterior(): Map<string, Distribution> {
+    return new Map(
+      Array.from(this.stats.entries()).map(([k, v]) => [k, v.summarize()]),
+    )
+  }
+
   public Reset() {
     this.totalFailedSamples = 0
     this.frameCount = 0
@@ -117,7 +122,7 @@ export class Animator {
             {
               points: this.points,
               coefficients: this.modelParameters,
-              component_enable: this.componentEnable
+              component_enable: this.componentEnable,
             },
             this.inferenceParameters,
           )
@@ -138,7 +143,6 @@ export class Animator {
             totalFailedSamples: this.totalFailedSamples,
             ips: result.ips,
             fps: fps,
-            posterior: this.stats,
             autoSIR: this.autoSIR,
           }
           this.inferenceReportCallback(info)

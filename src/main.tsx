@@ -7,7 +7,7 @@ import { StrictMode } from "react"
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <h1>bzz</h1>
+    <h1>SIR Curve Fit</h1>
     <App />
   </StrictMode>,
 )

@@ -63,9 +63,16 @@ export default function CurveFit() {
 
   const throttledSetIps = throttle(setIps, 500)
   const throttledSetFps = throttle(setFps, 500)
-  const throttledSetPosteriorState = throttle(setPosteriorState, 500)
+  const throttledSetPosteriorState = throttle(() => {
+    setPosteriorState(animatorRef.current.getPosterior())
+  }, 500)
 
-  function SIR_Update() {}
+  function SIR_Update() {
+    const s = animatorRef.current.getPosterior()
+    setModelState(s)
+    setPosteriorState(s)
+    animatorRef.current.setModelParameters(s)
+  }
 
   function setter(data) {
     // This function is handed to the inference loop, which uses it to convey summary data
@@ -73,18 +80,10 @@ export default function CurveFit() {
     setEmptyPosterior(data.totalFailedSamples)
     throttledSetIps(data.ips)
     throttledSetFps(data.fps)
-    const newState = (s: Map<string, RunningStats>) => {
-      return new Map(
-        Array.from(s.entries()).map(([k, v]) => [k, v.summarize()]),
-      )
-    }
     if (data.autoSIR) {
-      const s = newState(data.posterior)
-      setModelState(s)
-      setPosteriorState(s)
-      animatorRef.current.setModelParameters(s)
+      SIR_Update()
     } else {
-      throttledSetPosteriorState(newState(data.posterior))
+      throttledSetPosteriorState()
     }
   }
 
@@ -160,8 +159,9 @@ export default function CurveFit() {
             name="polynomial"
             enabled={componentEnable.get('polynomial')}
             onChange={e => {
-              setComponentEnable(new Map(componentEnable.entries()).set('polynomial', e.target.checked))
-              // XXX
+              const ce = new Map(componentEnable.entries()).set('polynomial', e.target.checked)
+              setComponentEnable(ce)
+              animatorRef.current.setComponentEnable(ce)
             }}
             equation="a_0 + a_1 x + a_2 x^2"
           >
@@ -221,20 +221,21 @@ export default function CurveFit() {
         empty posterior: <span id="empty-posterior">{emptyPosterior}</span>
         <br />
         <label>
-          pause
           <input
             id="pause"
             type="checkbox"
             onChange={(e) => animatorRef.current.setPause(e.target.checked)}
-          />
+            />
+            pause
         </label>
+        &nbsp;&nbsp;
         <label>
-          Auto-SIR
           <input
             id="auto-SIR"
             type="checkbox"
             onChange={(e) => animatorRef.current.setAutoSIR(e.target.checked)}
-          />
+            />
+            Auto-SIR
         </label>
       </div>
       <div className="card">
@@ -338,7 +339,7 @@ function InferenceUI({ K, N, setK, setN }) {
   ))
   return (
     <div id="inference-parameters">
-      <label htmlFor="importanceSamplesPerParticle">N = \,</label>
+      <label htmlFor="importanceSamplesPerParticle">N =</label>
       <select
         name="N"
         value={N}
