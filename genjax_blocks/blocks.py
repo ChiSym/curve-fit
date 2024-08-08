@@ -480,7 +480,7 @@ class CurveDataModel:
             "curve": C.d({"curve_params": self.curve.constraint_from_params(curve_params)}),
             "data": C.d({
                 "kernel_params": self.data_model.constraint_from_params(kernel_params),
-                "kernel": C[jnp.arange(len(samples))].set(self.data_model.constraint_from_samples(samples))
+                "kernel": C[jnp.arange(len(xs))].set(self.data_model.constraint_from_samples(samples))
             })
         })
         return self.gf.assess(constraint, (xs,))[0]
