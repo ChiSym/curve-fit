@@ -1,6 +1,6 @@
 import "./App.css"
 import { Animator, Distribution } from "./animator.ts"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, ChangeEvent } from "react"
 import throttle from "lodash.throttle"
 import katex from "katex"
 import { InferenceParameters } from "./gpgpu.ts"
@@ -43,6 +43,10 @@ export default function CurveFit() {
   const [modelState, setModelState] = useState(new Map(modelParams.entries()))
   const [posteriorState, setPosteriorState] = useState(
     new Map(modelParams.entries()),
+  )
+
+  const [componentEnable, setComponentEnable] = useState(
+    new Map().set('polynomial', true).set('periodic', true)
   )
 
   const [ips, setIps] = useState(0.0)
@@ -96,6 +100,7 @@ export default function CurveFit() {
     a.setInferenceParameters(inferenceParameters)
     a.setModelParameters(modelParams)
     a.setPoints(points.points)
+    a.setComponentEnable(componentEnable)
     return a.run()
   }, [])
 
@@ -103,6 +108,7 @@ export default function CurveFit() {
     setModelState(new Map(modelParams.entries()))
     setPosteriorState(new Map(modelParams.entries()))
     animatorRef.current.setModelParameters(modelParams)
+    animatorRef.current.Reset()
   }
 
   function canvasClick(event: React.MouseEvent<HTMLCanvasElement>) {
@@ -122,10 +128,6 @@ export default function CurveFit() {
     animatorRef.current.setPoints(ps)
     Reset()
   }
-
-  // let pointEvictionIndex = 0
-  // renderer.canvas.addEventListener("click", (event) => {
-  // })
 
   return (
     <>
@@ -154,7 +156,15 @@ export default function CurveFit() {
       ></InferenceUI>
       <div id="model-components">
         <div className="column">
-          <ModelComponent name="polynomial" equation="a_0 + a_1 x + a_2 x^2">
+          <ModelComponent
+            name="polynomial"
+            enabled={componentEnable.get('polynomial')}
+            onChange={e => {
+              setComponentEnable(new Map(componentEnable.entries()).set('polynomial', e.target.checked))
+              // XXX
+            }}
+            equation="a_0 + a_1 x + a_2 x^2"
+          >
             {["a_0", "a_1", "a_2"].map((n) => (
               <ComponentParameter
                 name={n}
@@ -165,7 +175,12 @@ export default function CurveFit() {
               ></ComponentParameter>
             ))}
           </ModelComponent>
-          <ModelComponent name="inlier (not working)" equation="">
+          <ModelComponent
+            name="inlier (not working)"
+            enabled={false}
+            onChange={() => null}
+            equation=""
+          >
             <ComponentParameter
               name="inlier"
               tex_name="\sigma_\mathrm{in}"
@@ -176,7 +191,16 @@ export default function CurveFit() {
           </ModelComponent>
         </div>
         <div className="column">
-          <ModelComponent name="periodic" equation="A\sin(\phi + \omega x)">
+          <ModelComponent
+            name="periodic"
+            enabled={componentEnable.get('periodic')}
+            onChange={e => {
+              const ce = new Map(componentEnable.entries()).set('periodic', e.target.checked)
+              setComponentEnable(ce)
+              animatorRef.current.setComponentEnable(ce)
+            }}
+            equation="A\sin(\phi + \omega x)"
+          >
             {[
               ["A", "A"],
               ["omega", "\\omega"],
@@ -227,10 +251,14 @@ export default function CurveFit() {
 
 function ModelComponent({
   name,
+  enabled,
+  onChange,
   equation = undefined,
   children,
 }: {
   name: string
+  enabled: boolean
+  onChange: React.EventHandler<ChangeEvent<HTMLInputElement>>
   equation?: string
   children: React.ReactNode
 }) {
@@ -240,6 +268,8 @@ function ModelComponent({
         <input
           className="model-component-enable"
           id={name + "_enable"}
+          checked={enabled}
+          onChange={onChange}
           type="checkbox"
         />
         {name}
@@ -296,9 +326,6 @@ function ComponentParameter({
 }
 
 function InferenceUI({ K, N, setK, setN }) {
-  // const [importanceSamplesPerParticle, setImportanceSamplesPerParticle] = useState(1000)
-  // const [numParticles, setNumParticles] = useState(25)
-
   const ns = [100, 1000, 5000, 10000, 50000, 100000].map((i) => (
     <option key={i} value={i}>
       {i.toLocaleString()}

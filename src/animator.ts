@@ -33,9 +33,14 @@ export class Animator {
   private readonly inferenceParameters: InferenceParameters
   private readonly inferenceReportCallback: (r: InferenceReport) => void
   private readonly stats: Map<string, RunningStats>
-  private points: number[][]
+  private points: number[][] = []
   private pause: boolean = false
   private autoSIR: boolean = false
+  private componentEnable: Map<string, boolean> = new Map()
+  private frameCount = 0
+  private totalFailedSamples = 0
+  private t0: DOMHighResTimeStamp = performance.now()
+
 
   // TODO: define type ModelParameters as Map<string, Distribution>; change signature of inference
   // engine code to take multiple parameters, giving up old name
@@ -79,6 +84,16 @@ export class Animator {
     this.autoSIR = autoSIR
   }
 
+  public setComponentEnable(componentEnable: Map<string, boolean>) {
+    this.componentEnable = new Map(componentEnable.entries())
+  }
+
+  public Reset() {
+    this.totalFailedSamples = 0
+    this.frameCount = 0
+    this.t0 = performance.now()
+  }
+
   // Sets up and runs the inference animation. Returns a function which can
   // be used to halt the animation (after the current frame is rendered).
   public run(): () => void {
@@ -92,14 +107,7 @@ export class Animator {
     const renderer = new Render(this.modelParameters.size)
 
     let stopAnimation = false
-
-    function Reset() {
-      totalFailedSamples = 0
-    }
-
-    let frameCount = 0
-    let t0 = performance.now() // TODO: need to reset this from time to time along with frame count
-    let totalFailedSamples = 0
+    this.t0 = performance.now() // TODO: need to reset this from time to time along with frame count
 
     const frame = (t: DOMHighResTimeStamp) => {
       let result = undefined
@@ -109,15 +117,13 @@ export class Animator {
             {
               points: this.points,
               coefficients: this.modelParameters,
-              component_enable: new Map()
-                .set("polynomial", true)
-                .set("foo", true),
+              component_enable: this.componentEnable
             },
             this.inferenceParameters,
           )
         }
         if (result) {
-          totalFailedSamples += result.failedSamples
+          this.totalFailedSamples += result.failedSamples
 
           for (const m of result.selectedModels) {
             let i = 0
@@ -125,11 +131,11 @@ export class Animator {
               v.observe(m.model[i++])
             }
           }
-          ++frameCount
-          const fps = Math.trunc(frameCount / ((t - t0) / 1e3))
+          ++this.frameCount
+          const fps = Math.trunc(this.frameCount / ((t - this.t0) / 1e3))
           renderer.render(this.points, result)
           const info = {
-            totalFailedSamples: totalFailedSamples,
+            totalFailedSamples: this.totalFailedSamples,
             ips: result.ips,
             fps: fps,
             posterior: this.stats,
