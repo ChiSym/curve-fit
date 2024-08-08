@@ -249,10 +249,9 @@ for _ in range(N_steps):
     params_optimized = params_optimized + learning_rate * grad
 
 curve_optimized = exponential.curve_from_params(params_optimized)
-ys_optimized = curve_optimized(xs)
 
 Plot.new([
-    Plot.line(list(zip(xs, ys_optimized))),
+    Plot.line(list(zip(xs, curve_optimized(xs)))),
     Plot.dot(list(zip(xs, ys_observed))),
 ])
 
