@@ -34,7 +34,7 @@ export class Animator {
   private readonly inferenceParameters: InferenceParameters
   private readonly inferenceReportCallback: (r: InferenceReport) => void
   private readonly stats: Map<string, RunningStats>
-  private points: number[][] = []
+  private points: number[][]
   private pause: boolean = false
   private autoSIR: boolean = false
 

@@ -152,11 +152,10 @@ export class GPGPU_Inference {
   }
 
   private sendParameters(parameters: ModelParameters) {
-    console.log('sending', parameters)
     const gl = this.wgl.gl
+
     // points is a list: [[x1, y1], ...]
     // to send to the GPU, we flatten it: [x1, y1, x2, ...]
-
     gl.uniform2fv(this.pointsLoc, parameters.points.flat())
 
     gl.uniform1fv(
@@ -262,7 +261,6 @@ export class GPGPU_Inference {
     modelParameters: ModelParameters,
     inferenceParameters: InferenceParameters,
   ): InferenceResult {
-    console.log('inference', modelParameters, inferenceParameters)
     let inferenceTime = 0.0
     let failedSamples = 0
     let modelIndex = 0

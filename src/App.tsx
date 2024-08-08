@@ -1,9 +1,10 @@
 import "./App.css"
-import { Animator, Distribution } from "./main.ts"
+import { Animator, Distribution  } from "./animator.ts"
 import { useState, useEffect, useRef } from "react"
 import throttle from "lodash.throttle"
 import katex from "katex"
 import { InferenceParameters } from "./gpgpu.ts"
+import { RunningStats } from "./stats.ts"
 
 export const modelParams: Map<string, Distribution> = new Map([
   ["a_0", { mu: 0, sigma: 2 }],
@@ -29,6 +30,13 @@ export default function CurveFit() {
     defaultInferenceParameters,
   )
 
+  const [points, setPoints] = useState(() => {
+    const xs = [-0.5, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4]
+    const points = xs.map((x) => [x, 0.7 * x + 0.3 * Math.sin(9.0 * x + 0.3)])
+    points[7][1] = 0.75
+    return {points: points, evictionIndex: 0}
+  })
+
   //const [modelParameters, setModelParameters] = useState([params.map(p => p.initialValue.mu), params.map(p=>p.initialValue.sigma))
   //  TODO: do we need an initial copy?
   const [emptyPosterior, setEmptyPosterior] = useState(0)
@@ -39,13 +47,6 @@ export default function CurveFit() {
 
   const [ips, setIps] = useState(0.0)
   const [fps, setFps] = useState(0.0)
-
-  // setInnerText("#fps", fps.toString())
-  // setInnerText("#ips", `${(result.ips / 1e6).toFixed(1)} M`)
-
-  function handleClick() {
-    console.log("click")
-  }
 
   function modelChange(k1: string, k2: string, v: number) {
     console.log(`${k1}_${k2} -> ${v}`)
@@ -60,15 +61,25 @@ export default function CurveFit() {
   const throttledSetFps = throttle(setFps, 500)
   const throttledSetPosteriorState = throttle(setPosteriorState, 500)
 
+  function SIR_Update() {}
+
   function setter(data) {
     // This function is handed to the inference loop, which uses it to convey summary data
     // back to the UI.
-    console.log("SETTING", data)
     setEmptyPosterior(data.totalFailedSamples)
     throttledSetIps(data.ips)
     throttledSetFps(data.fps)
-    console.log("SPS", new Map(data.posterior))
-    throttledSetPosteriorState(new Map(Array.from(data.posterior.entries()).map(([k, v]) => [k, v.summarize()])))
+    const newState = (s: Map<string, RunningStats>) => {
+      return new Map(Array.from(s.entries()).map(([k, v]) => [k, v.summarize()]))
+    }
+    if (data.autoSIR) {
+      const s = newState(data.posterior)
+      setModelState(s)
+      setPosteriorState(s)
+      animatorRef.current.setModelParameters(s)
+    } else {
+      throttledSetPosteriorState(newState(data.posterior))
+    }
   }
 
   useEffect(() => {
@@ -76,22 +87,51 @@ export default function CurveFit() {
     // - Render all the spans tagged with TeX source with KaTeX
     Array.from(document.querySelectorAll("span.katex-render")).forEach((e) => {
       const text = e.getAttribute("katex-source")!
-      console.log("renderin", text)
       katex.render(text, e as HTMLElement)
     })
     // - Start the animation loop
-    animatorRef.current.setInferenceParameters(inferenceParameters)
-    animatorRef.current.setModelParameters(modelParams)
-    return animatorRef.current.run()
+    const a = animatorRef.current
+    a.setInferenceParameters(inferenceParameters)
+    a.setModelParameters(modelParams)
+    a.setPoints(points.points)
+    return a.run()
   }, [])
+
+  function Reset() {
+    setModelState(new Map(modelParams.entries()))
+    setPosteriorState(new Map(modelParams.entries()))
+    animatorRef.current.setModelParameters(modelParams)
+  }
+
+  function canvasClick(event: React.MouseEvent<HTMLCanvasElement>) {
+    const target = event.target as HTMLCanvasElement
+    const rect = target.getBoundingClientRect()
+    const x = ((event.clientX - rect.left) / target.width) * 2.0 - 1.0
+    const y = ((event.clientY - rect.top) / target.height) * -2.0 + 1.0
+
+    const ps = points.points
+    let i = points.evictionIndex
+    ps[i][0] = x
+    ps[i][1] = y
+    if (++i >= ps.length) {
+      i = 0
+    }
+    setPoints({points: ps.slice(), evictionIndex: i})
+    animatorRef.current.setPoints(ps)
+    Reset()
+  }
+
+  // let pointEvictionIndex = 0
+  // renderer.canvas.addEventListener("click", (event) => {
+  // })
 
   return (
     <>
-      <canvas id="c" onClick={handleClick}></canvas>
+      <canvas id="c" onClick={canvasClick}></canvas>
       <br />
       FPS: <span id="fps">{fps}</span>
       <br />
-      IPS: <span id="ips">{Number(ips / 1e6).toFixed(2) + " M"}</span>
+      IPS: <span id="ips">{(ips / 1e6).toFixed(2) + " M"}</span>
       <br />
       <InferenceUI
         K={inferenceParameters.numParticles}
@@ -156,12 +196,16 @@ export default function CurveFit() {
         <br />
         <label>
           pause
-          <input id="pause" type="checkbox" />
+          <input id="pause" type="checkbox" onChange={e => animatorRef.current.setPause(e.target.checked)}/>
         </label>
         <label>
           Auto-SIR
-          <input id="auto-SIR" type="checkbox" />
+          <input id="auto-SIR" type="checkbox" onChange={e => animatorRef.current.setAutoSIR(e.target.checked)} />
         </label>
+      </div>
+      <div className="card">
+        <button id="sir" type="button" onClick={SIR_Update}>Update my priors, SIR!</button>
+        <button id="reset-priors" type="button" onClick={Reset}>Reset</button>
       </div>
     </>
   )
@@ -201,20 +245,22 @@ function ComponentParameter({
   posterior_value,
   onChange,
 }) {
+  const min = {mu: -2, sigma: 0}
+  const max = {mu: 2, sigma: 2}
   const innerParams = ["mu", "sigma"].map((innerName) => {
     const joint_name = name + "_" + innerName
     return (
       <>
         <span
           className="katex-render"
-          katex-source={tex_name + "\\hskip{0.5em}\\" + innerName + ": "}
+          katex-source={tex_name + "\\hskip{0.5em}\\" + innerName + ":\\hskip{0.2em} "}
         ></span>
         <input
           type="range"
-          min="-1"
-          max="1"
+          min={min[innerName as keyof Distribution]}
+          max={max[innerName as keyof Distribution]}
           step=".01"
-          defaultValue="0"
+          value={value[innerName]}
           id={joint_name}
           onChange={(e) => onChange(name, innerName, e.target.value)}
         />
