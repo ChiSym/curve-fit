@@ -45,7 +45,7 @@ class Block:
         return NotImplementedError()
 
     def curve_from_params(self, params):
-        return self.gf.assess(C["curve_params"].set(self.constraint_from_params(params)), ())[1]
+        return BlockFunction(params, self.function_family)
 
     def __add__(self, b: "Block"):
         return Pointwise(self, b, jnp.add)
