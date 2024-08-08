@@ -1,4 +1,5 @@
-import { type Model, type Normal } from "./model"
+import { Distribution } from "./main"
+import { type Model } from "./model"
 import { importanceShader } from "./shaders"
 import { WGL2Helper } from "./webgl"
 
@@ -11,7 +12,7 @@ export interface ResultBatch {
 
 export interface ModelParameters {
   points: number[][]
-  coefficients: Normal[]
+  coefficients: Map<string, Distribution>
   component_enable: Map<string, boolean>
 }
 
@@ -160,11 +161,11 @@ export class GPGPU_Inference {
 
     gl.uniform1fv(
       this.alphaLocLoc,
-      parameters.coefficients.map((c) => c.mu),
+      Array.from(parameters.coefficients.values()).map(v => v.mu)
     )
     gl.uniform1fv(
       this.alphaScaleLoc,
-      parameters.coefficients.map((c) => c.sigma),
+      Array.from(parameters.coefficients.values()).map((c) => c.sigma),
     )
 
     let enableBits = 0
