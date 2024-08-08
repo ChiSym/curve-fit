@@ -1,5 +1,5 @@
 import "./App.css"
-import { Animator, Distribution  } from "./animator.ts"
+import { Animator, Distribution } from "./animator.ts"
 import { useState, useEffect, useRef } from "react"
 import throttle from "lodash.throttle"
 import katex from "katex"
@@ -34,7 +34,7 @@ export default function CurveFit() {
     const xs = [-0.5, -0.4, -0.3, -0.2, -0.1, 0, 0.1, 0.2, 0.3, 0.4]
     const points = xs.map((x) => [x, 0.7 * x + 0.3 * Math.sin(9.0 * x + 0.3)])
     points[7][1] = 0.75
-    return {points: points, evictionIndex: 0}
+    return { points: points, evictionIndex: 0 }
   })
 
   //const [modelParameters, setModelParameters] = useState([params.map(p => p.initialValue.mu), params.map(p=>p.initialValue.sigma))
@@ -70,7 +70,9 @@ export default function CurveFit() {
     throttledSetIps(data.ips)
     throttledSetFps(data.fps)
     const newState = (s: Map<string, RunningStats>) => {
-      return new Map(Array.from(s.entries()).map(([k, v]) => [k, v.summarize()]))
+      return new Map(
+        Array.from(s.entries()).map(([k, v]) => [k, v.summarize()]),
+      )
     }
     if (data.autoSIR) {
       const s = newState(data.posterior)
@@ -116,7 +118,7 @@ export default function CurveFit() {
     if (++i >= ps.length) {
       i = 0
     }
-    setPoints({points: ps.slice(), evictionIndex: i})
+    setPoints({ points: ps.slice(), evictionIndex: i })
     animatorRef.current.setPoints(ps)
     Reset()
   }
@@ -196,16 +198,28 @@ export default function CurveFit() {
         <br />
         <label>
           pause
-          <input id="pause" type="checkbox" onChange={e => animatorRef.current.setPause(e.target.checked)}/>
+          <input
+            id="pause"
+            type="checkbox"
+            onChange={(e) => animatorRef.current.setPause(e.target.checked)}
+          />
         </label>
         <label>
           Auto-SIR
-          <input id="auto-SIR" type="checkbox" onChange={e => animatorRef.current.setAutoSIR(e.target.checked)} />
+          <input
+            id="auto-SIR"
+            type="checkbox"
+            onChange={(e) => animatorRef.current.setAutoSIR(e.target.checked)}
+          />
         </label>
       </div>
       <div className="card">
-        <button id="sir" type="button" onClick={SIR_Update}>Update my priors, SIR!</button>
-        <button id="reset-priors" type="button" onClick={Reset}>Reset</button>
+        <button id="sir" type="button" onClick={SIR_Update}>
+          Update my priors, SIR!
+        </button>
+        <button id="reset-priors" type="button" onClick={Reset}>
+          Reset
+        </button>
       </div>
     </>
   )
@@ -245,15 +259,17 @@ function ComponentParameter({
   posterior_value,
   onChange,
 }) {
-  const min = {mu: -2, sigma: 0}
-  const max = {mu: 2, sigma: 2}
+  const min = { mu: -2, sigma: 0 }
+  const max = { mu: 2, sigma: 2 }
   const innerParams = ["mu", "sigma"].map((innerName) => {
     const joint_name = name + "_" + innerName
     return (
       <>
         <span
           className="katex-render"
-          katex-source={tex_name + "\\hskip{0.5em}\\" + innerName + ":\\hskip{0.2em} "}
+          katex-source={
+            tex_name + "\\hskip{0.5em}\\" + innerName + ":\\hskip{0.2em} "
+          }
         ></span>
         <input
           type="range"

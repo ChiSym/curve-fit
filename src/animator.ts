@@ -3,7 +3,7 @@ import { Render } from "./render.ts"
 import { RunningStats } from "./stats.ts"
 
 export interface Distribution {
-  mu: number,
+  mu: number
   sigma: number
 }
 
@@ -29,7 +29,6 @@ export interface InferenceReport {
 }
 
 export class Animator {
-
   private modelParameters: Map<string, Distribution>
   private readonly inferenceParameters: InferenceParameters
   private readonly inferenceReportCallback: (r: InferenceReport) => void
@@ -38,30 +37,38 @@ export class Animator {
   private pause: boolean = false
   private autoSIR: boolean = false
 
-
   // TODO: define type ModelParameters as Map<string, Distribution>; change signature of inference
   // engine code to take multiple parameters, giving up old name
 
-  constructor(modelParameters: Map<string, Distribution>, inferenceParameters: InferenceParameters, inferenceReportCallback: (r: InferenceReport) => void) {
+  constructor(
+    modelParameters: Map<string, Distribution>,
+    inferenceParameters: InferenceParameters,
+    inferenceReportCallback: (r: InferenceReport) => void,
+  ) {
     this.inferenceReportCallback = inferenceReportCallback
     // make copies of the initial values
     this.modelParameters = new Map(modelParameters.entries())
     this.inferenceParameters = Object.assign({}, inferenceParameters)
-    this.stats = new Map(Array.from(modelParameters.keys()).map(k => [k, new RunningStats]))
+    this.stats = new Map(
+      Array.from(modelParameters.keys()).map((k) => [k, new RunningStats()]),
+    )
   }
 
   public setInferenceParameters(ps: InferenceParameters) {
-    this.inferenceParameters.importanceSamplesPerParticle = ps.importanceSamplesPerParticle
+    this.inferenceParameters.importanceSamplesPerParticle =
+      ps.importanceSamplesPerParticle
     this.inferenceParameters.numParticles = ps.numParticles
   }
 
   public setModelParameters(params: Map<string, Distribution>) {
-    this.modelParameters = new Map(Array.from(params.entries()).map(([k, v]) => [k, Object.assign({}, v)]))
-    this.stats.forEach(s => s.reset())
+    this.modelParameters = new Map(
+      Array.from(params.entries()).map(([k, v]) => [k, Object.assign({}, v)]),
+    )
+    this.stats.forEach((s) => s.reset())
   }
 
   public setPoints(points: number[][]) {
-    this.points = points.map(v => v.slice())  // make copy
+    this.points = points.map((v) => v.slice()) // make copy
   }
 
   public setPause(pause: boolean) {
@@ -78,7 +85,10 @@ export class Animator {
     const maxSamplesPerParticle = 100_000
     // XXX: could get the above two constants by looking at the HTML,
     // but we really should learn to use a framework at some point
-    const gpu = new GPGPU_Inference(this.modelParameters.size, maxSamplesPerParticle)
+    const gpu = new GPGPU_Inference(
+      this.modelParameters.size,
+      maxSamplesPerParticle,
+    )
     const renderer = new Render(this.modelParameters.size)
 
     let stopAnimation = false
@@ -99,7 +109,9 @@ export class Animator {
             {
               points: this.points,
               coefficients: this.modelParameters,
-              component_enable: new Map().set('polynomial', true).set('foo', true),
+              component_enable: new Map()
+                .set("polynomial", true)
+                .set("foo", true),
             },
             this.inferenceParameters,
           )
@@ -108,7 +120,7 @@ export class Animator {
           totalFailedSamples += result.failedSamples
 
           for (const m of result.selectedModels) {
-            let i = 0;
+            let i = 0
             for (const v of this.stats.values()) {
               v.observe(m.model[i++])
             }
@@ -121,13 +133,13 @@ export class Animator {
             ips: result.ips,
             fps: fps,
             posterior: this.stats,
-            autoSIR: this.autoSIR
+            autoSIR: this.autoSIR,
           }
           this.inferenceReportCallback(info)
           // emptyPosterior.innerText = totalFailedSamples.toString()
         }
         if (stopAnimation) {
-          console.log('halting animation')
+          console.log("halting animation")
           return
         }
         requestAnimationFrame(frame)
@@ -135,11 +147,11 @@ export class Animator {
         log("error", error)
       }
     }
-    console.log('starting animation')
+    console.log("starting animation")
     requestAnimationFrame(frame)
     return () => {
-      console.log('requesting animation halt')
-      stopAnimation = true;
+      console.log("requesting animation halt")
+      stopAnimation = true
     }
   }
 }

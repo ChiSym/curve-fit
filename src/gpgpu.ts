@@ -160,7 +160,7 @@ export class GPGPU_Inference {
 
     gl.uniform1fv(
       this.alphaLocLoc,
-      Array.from(parameters.coefficients.values()).map(v => v.mu)
+      Array.from(parameters.coefficients.values()).map((v) => v.mu),
     )
     gl.uniform1fv(
       this.alphaScaleLoc,

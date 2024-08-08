@@ -27,7 +27,7 @@ export class Render {
       gl_Position = a_position;
     }`
 
-    console.log('render constructor', modelSize)
+    console.log("render constructor", modelSize)
     const program = wgl.createProgram(vs, renderShader(modelSize))
     this.positionLoc = gl.getAttribLocation(program, "a_position")
     this.pointsLoc = wgl.getUniformLocation(program, "points")

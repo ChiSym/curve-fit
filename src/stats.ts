@@ -1,7 +1,7 @@
 export interface NormalParams {
-    mu: number
-    sigma: number
-  }
+  mu: number
+  sigma: number
+}
 
 export class RunningStats {
   // https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford%27s_online_algorithm
