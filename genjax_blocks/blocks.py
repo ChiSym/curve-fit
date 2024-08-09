@@ -444,6 +444,16 @@ class CurveDataModel:
             jax.random.split(k, n), ()
         )
 
+    def log_density(self, curve_params, kernel_params, xs, samples):
+        constraint = C.d({
+            "curve": C.d({"curve_params": self.curve.constraint_from_params(curve_params)}),
+            "data": C.d({
+                "kernel_params": self.data_model.constraint_from_params(kernel_params),
+                "kernel": C[jnp.arange(len(xs))].set(self.data_model.constraint_from_samples(samples))
+            })
+        })
+        return self.gf.assess(constraint, (xs,))[0]
+
     def importance_resample(
         self,
         xs: FloatArray,
@@ -474,13 +484,3 @@ class CurveDataModel:
         winners += jnp.arange(0, N * K, N)
 
         return jax.tree.map(lambda x: x[winners], samples)
-
-    def log_density(self, curve_params, kernel_params, xs, samples):
-        constraint = C.d({
-            "curve": C.d({"curve_params": self.curve.constraint_from_params(curve_params)}),
-            "data": C.d({
-                "kernel_params": self.data_model.constraint_from_params(kernel_params),
-                "kernel": C[jnp.arange(len(xs))].set(self.data_model.constraint_from_samples(samples))
-            })
-        })
-        return self.gf.assess(constraint, (xs,))[0]
