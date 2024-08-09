@@ -19,9 +19,9 @@ class Block:
     from the underlying distribution."""
 
     params_distribution: GenerativeFunction
-    function_family: Callable
+    function_family: Callable # type: ignore
     gf: GenerativeFunction
-    jitted_sample: Callable
+    jitted_sample: Callable # type: ignore
 
     def __init__(self, params_distribution, function_family):
         self.params_distribution = params_distribution
@@ -65,7 +65,7 @@ class BlockFunction(Pytree):
     """A BlockFunction is a Pytree which is also Callable."""
 
     params: FloatArray | Tuple
-    function_family: Callable = Pytree.static()
+    function_family: Callable = Pytree.static() # type: ignore
 
     def __call__(self, x: ArrayLike) -> FloatArray:
         return self.function_family(self.params, x)
@@ -229,9 +229,9 @@ class CurveFit:
 
     gf: GenerativeFunction
     curve: Block
-    jitted_importance: Callable
+    jitted_importance: Callable # type: ignore
     coefficient_paths: List[Tuple]
-    categorical_sampler: Callable
+    categorical_sampler: Callable # type: ignore
 
     def __init__(
         self,
@@ -328,7 +328,7 @@ class DataModel:
     params_distribution: GenerativeFunction
     kernel: GenerativeFunction
     gf: GenerativeFunction
-    jitted_sample: Callable
+    jitted_sample: Callable # type: ignore
 
     def __init__(self, params_distribution, kernel):
         self.params_distribution = params_distribution
@@ -419,8 +419,8 @@ class CurveDataModel:
     curve: Block
     data_model: DataModel
     gf: GenerativeFunction
-    jitted_sample: Callable
-    jitted_importance: Callable
+    jitted_sample: Callable # type: ignore
+    jitted_importance: Callable # type: ignore
     coefficient_paths: List[Tuple]
 
     def __init__(self, curve, data_model):
