@@ -333,10 +333,10 @@ function ComponentParameter({
           type="range"
           min={min[keyName]}
           max={max[keyName]}
-          step="0.1"
+          step={0.1}
           value={value[keyName]}
           id={joint_name}
-          onChange={(e) => onChange(name, innerName, parseInt(e.target.value))}
+          onChange={(e) => onChange(name, innerName, Number(e.target.value))}
         />
         <span id={joint_name + "-value"}>
           {Number(value[keyName]).toFixed(2)}
@@ -378,6 +378,7 @@ function InferenceUI({
     <div id="inference-parameters">
       <label htmlFor="importanceSamplesPerParticle">N =</label>
       <select
+        id="importanceSamplesPerParticle"
         name="N"
         value={N}
         onChange={(e) => setN(parseInt(e.target.value))}
