@@ -219,13 +219,13 @@ Plot.new([
 # Let's try to fit the following points with a member of the exponential family.
 
 # %%
-nonlinear_sample_curve = exponential.sample(k=jax.random.PRNGKey(1)).get_retval()
-print(f"Latent parameters: [a, b] = {nonlinear_sample_curve.params[0]}")
+sample_curve = exponential.sample(k=jax.random.PRNGKey(1)).get_retval()
+print(f"Latent parameters: [a, b] = {sample_curve.params[0]}")
 
 ys_observed = noisy_data_model.sample(sample_curve(xs)).get_retval()[0]
 
 Plot.new([
-    Plot.line(list(zip(xs_plot, nonlinear_sample_curve(xs_plot))), strokeDasharray="7"),
+    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
     Plot.dot(list(zip(xs, ys_observed))),
 ])
 
