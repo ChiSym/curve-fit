@@ -151,21 +151,21 @@ functools.reduce(lambda a, b: a & b, [
 # We will consider these as a model for data sets that do not exactly lie on curves.
 
 # %%
-# Example of some NoisyCurve samples = finite point sets, drawn from a single curve at a time
+sample_curve = quartic.sample(k=jax.random.PRNGKey(134)).get_retval()
+xs_plot = jnp.linspace(-0.7, 0.7, 100)
 
 xs = jnp.linspace(-0.7, 0.7, 10)
-
-sample_curve = quartic.sample(k=jax.random.PRNGKey(134)).get_retval()
 ys_latent = sample_curve(xs)
 
 noisy_data_model = b.NoisyData(sigma_inlier=genjax.uniform(0.0, 0.1))
-noisy_ys_samples = noisy_data_model.sample(ys_latent, 12)
-print(f"sigma_in values: {noisy_ys_samples.get_choices()["kernel_params", "σ_inlier"]}")
-noisy_ys_values = noisy_ys_samples.get_retval()
+ys_observed = noisy_data_model.sample(ys_latent, 12).get_retval()
 
-Plot.new(
-    [Plot.line(list(zip(xs, ys_latent)))] +
-    [Plot.dot(list(zip(xs, ys)), stroke=i) for i, ys in enumerate(noisy_ys_values)])
+Plot.new([
+    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
+] + [
+    Plot.dot(list(zip(xs, ys)), stroke=i)
+    for i, ys in enumerate(ys_observed)
+])
 
 # %% [markdown]
 # ### Classic technique: least squares
@@ -175,7 +175,7 @@ Plot.new(
 # A common answer is to choose the $M$ and $\vec b$ that minimize the sum of the squared errors $\sum_{i=1}^N \|M\vec x_i + \vec b - \vec y_i\|^2$.  With a little elbow grease, this can be explicitly solved, and libraries do it for us.
 
 # %%
-ys = noisy_ys_values[0]
+ys = ys_observed[0]
 
 # First, reform the xs = [..., x_i, ...] into a matrix whose rows are the augmented vectors [1, x_i].
 xs_augmented = jnp.vstack([jnp.ones(len(xs)), xs]).T
@@ -185,30 +185,30 @@ xs_augmented = jnp.vstack([jnp.ones(len(xs)), xs]).T
 c0, c1 = jnp.linalg.lstsq(xs_augmented, ys)[0]
 line = lambda x: c0 + c1*x
 
-graph_xs = jnp.array([xs[0], xs[-1]])
 Plot.new([
+    Plot.line(list(zip(xs_plot, line(xs_plot)))),
     Plot.dot(list(zip(xs, ys))),
-    Plot.line(list(zip(graph_xs, line(graph_xs))))
 ])
 # %% [markdown]
 # Sometimes least squares fitting may be hijacked to solve other problems.  For instance, suppose we wanted to fit a polynomial curve of fixed degree $d$ to some data $(x_i,y_i)$ for $i=1,\ldots,N$.  The right hand side of the desired equation $y = a_d x^d + a_{d-1} x^{d-1} + \cdots + a_1 x + a_0$ may be a polynomial in $x$, but it is a *linear function of the powers of $x$*.  Therefore we can perform least squares fitting on the data $(\vec x_i,y_i)$ where $\vec x_i$ is the vector of powers of $x_i$.
 
 # %%
+max_degree = 4
+
 # Form the matrix whose rows are the power-vectors [1, x_i, x_i**2, ..., x_i**d]...
 def powers_vector(x, max_degree):
     return jnp.pow(jnp.array(x)[jnp.newaxis].T, jnp.arange(max_degree + 1))
 # ...with max_degree=4 (quartic)
-xs_powers = powers_vector(xs, 4)
+xs_powers = powers_vector(xs, max_degree)
 
 # Find the least squares fit to the system of equations
 # [c_0, c_1, ..., c_d] dot [1, x_i, x_i**2, ..., x_i**d] == c_0 + c_1 * x_i + c_2 * x_i**2 + ... + c_d * x_i**d == y_i.
 cs = jnp.linalg.lstsq(xs_powers, ys)[0]
-poly_f = lambda x: powers_vector(x, 4) @ cs
+fitted_poly = lambda x: powers_vector(x, max_degree) @ cs
 
-graph_xs = jnp.linspace(xs[0], xs[-1], 3 * xs.shape[0])
 Plot.new([
+    Plot.line(list(zip(xs_plot, fitted_poly(xs_plot)))),
     Plot.dot(list(zip(xs, ys))),
-    Plot.line(list(zip(graph_xs, poly_f(graph_xs))))
 ])
 # %% [markdown]
 # ### Gradient descent via noisy curves
@@ -221,14 +221,13 @@ Plot.new([
 
 # %%
 nonlinear_sample_curve = exponential.sample(k=jax.random.PRNGKey(1)).get_retval()
-params_latent = nonlinear_sample_curve.params[0]
-print(f"Latent parameters: [a, b] = {params_latent}")
-ys_latent = nonlinear_sample_curve(xs)
+print(f"Latent parameters: [a, b] = {nonlinear_sample_curve.params[0]}")
 
+ys_latent = nonlinear_sample_curve(xs)
 ys_observed = noisy_data_model.sample(ys_latent).get_retval()[0]
 
 Plot.new([
-    Plot.line(list(zip(xs, ys_latent)), strokeDasharray="7"),
+    Plot.line(list(zip(xs_plot, nonlinear_sample_curve(xs_plot))), strokeDasharray="7"),
     Plot.dot(list(zip(xs, ys_observed))),
 ])
 
@@ -237,13 +236,11 @@ joint_model = b.CurveDataModel(exponential, noisy_data_model)
 
 a_guess, b_guess = -1.0, -1.0
 params_guess = jnp.array([a_guess, b_guess])
-
 sigma_in = 0.05
 jitted_grad = jax.jit(jax.jacfwd(lambda params: joint_model.log_density(params, sigma_in, xs, ys_observed)))
 
-learning_rate = 1e-5
+N_steps, learning_rate = 1000, 1e-5
 params_optimized = params_guess
-N_steps = 1000
 for _ in range(N_steps):
     grad = jitted_grad(params_optimized)
     params_optimized = params_optimized + learning_rate * grad
@@ -251,7 +248,7 @@ for _ in range(N_steps):
 curve_optimized = exponential.curve_from_params(params_optimized)
 
 Plot.new([
-    Plot.line(list(zip(xs, curve_optimized(xs)))),
+    Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
     Plot.dot(list(zip(xs, ys_observed))),
 ])
 
