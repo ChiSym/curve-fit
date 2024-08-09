@@ -312,13 +312,56 @@ Plot.new([
 #
 # A subtler issue lurks our methodology: the assumption has already been baked in that the answer to the fitting problem consists of a single best curve.
 #
-# For example, the same data can be perfectly fit by curves of two very different parameters:
+# Let's take a periodic example:
 
 # %%
-# Example of a data set plus a couple very different looking BlockFunctions (maybe same Block but different params?) that fit the data well.
+sample_curve = periodic.sample(k=jax.random.PRNGKey(4)).get_retval()
+ys_observed = noisy_data_model.sample(sample_curve(xs)).get_retval()[0]
+
+Plot.new([
+    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7")
+] + [
+    Plot.dot(list(zip(xs, ys_observed))),
+])
+
+# %% [markdown]
+# Often trying to fit these same data from different starting points arrives at different results:
+
+# %%
+joint_model = b.CurveDataModel(periodic, noisy_data_model)
+jitted_grad = jax.jit(jax.jacfwd(lambda params: joint_model.log_density(params, sigma_in, xs, ys_observed)))
+
+N_fits = 12
+curves_optimized = []
+for params_guess in periodic.sample(N_fits).get_retval().params:
+    N_steps, learning_rate = 1000, 1e-5
+    params_optimized = params_guess
+    for _ in range(N_steps):
+        grad = jitted_grad(params_optimized)
+        params_optimized = params_optimized + learning_rate * grad
+
+    curves_optimized.append(periodic.curve_from_params(params_optimized))
+
+Plot.new([
+    Plot.line(list(zip(xs_plot, curve(xs_plot))), stroke=i)
+    for i, curve in enumerate(curves_optimized)
+] + [
+    Plot.dot(list(zip(xs, ys_observed))),
+])
 
 # %% [markdown]
 # What kind of solutions to the fitting problem should we even be looking for, that reflect the diversity of acceptable answers?
+
+# %% [markdown]
+# ### The issue of divergence
+#
+# Gradient descent can be unreliable: instability can lead to divergent values.  This is especially possible if the learning rate is chosen too large relative to the second derivatives in play.  Even with a conservative learning rate, inconsistent results are possible.
+#
+# In the above example, we have already (silently) experienced divergence some of the time, embodied by `nan`s:
+
+# %%
+for curve in curves_optimized:
+    print(curve.params)
 
 # %% [markdown]
 # ## Fitting curves to data: conditioning
