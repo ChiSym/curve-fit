@@ -1,5 +1,5 @@
 import "./App.css"
-import { Animator, Distribution } from "./animator.ts"
+import { Animator, Distribution, InferenceReport } from "./animator.ts"
 import { useState, useEffect, useRef, ChangeEvent } from "react"
 import throttle from "lodash.throttle"
 import katex from "katex"
@@ -61,6 +61,11 @@ export default function CurveFit() {
     animatorRef.current.setModelParameters(modelState)
   }
 
+  const [outlier, setOutlier] = useState({ mu: 0, sigma: 0 })
+  const setPOutlier = throttle((outlierStats: RunningStats) => {
+    setOutlier(outlierStats.summarize())
+  }, 250)
+
   const throttledSetIps = throttle(setIps, 500)
   const throttledSetFps = throttle(setFps, 500)
   const throttledSetPosteriorState = throttle(() => {
@@ -74,12 +79,13 @@ export default function CurveFit() {
     animatorRef.current.setModelParameters(s)
   }
 
-  function setter(data) {
+  function setter(data: InferenceReport) {
     // This function is handed to the inference loop, which uses it to convey summary data
     // back to the UI.
     setEmptyPosterior(data.totalFailedSamples)
     throttledSetIps(data.ips)
     throttledSetFps(data.fps)
+    setPOutlier(data.pOutlierStats)
     if (data.autoSIR) {
       SIR_Update()
     } else {
@@ -136,18 +142,24 @@ export default function CurveFit() {
       <br />
       IPS: <span id="ips">{(ips / 1e6).toFixed(2) + " M"}</span>
       <br />
+      {(outlier.mu || outlier.sigma) && (
+        <span id="outlier">
+          p<sub>outlier</sub> = {outlier.mu.toFixed(2)} &plusmn;{" "}
+          {outlier.sigma.toFixed(2)}
+        </span>
+      )}
       <InferenceUI
         K={inferenceParameters.numParticles}
         N={inferenceParameters.importanceSamplesPerParticle}
-        setK={(K: string) => {
-          const newIP = { ...inferenceParameters, numParticles: parseInt(K) }
+        setK={(K: number) => {
+          const newIP = { ...inferenceParameters, numParticles: K }
           setInferenceParameters(newIP)
           animatorRef.current.setInferenceParameters(newIP)
         }}
-        setN={(N: string) => {
+        setN={(N: number) => {
           const newIP = {
             ...inferenceParameters,
-            importanceSamplesPerParticle: parseInt(N),
+            importanceSamplesPerParticle: N,
           }
           setInferenceParameters(newIP)
           animatorRef.current.setInferenceParameters(newIP)
@@ -172,8 +184,8 @@ export default function CurveFit() {
               <ComponentParameter
                 name={n}
                 tex_name={n}
-                value={modelState.get(n)}
-                posterior_value={posteriorState.get(n)}
+                value={modelState.get(n)!}
+                posterior_value={posteriorState.get(n)!}
                 onChange={modelChange}
               ></ComponentParameter>
             ))}
@@ -187,8 +199,8 @@ export default function CurveFit() {
             <ComponentParameter
               name="inlier"
               tex_name="\sigma_\mathrm{in}"
-              value={modelState.get("inlier")}
-              posterior_value={posteriorState.get("inlier")}
+              value={modelState.get("inlier")!}
+              posterior_value={posteriorState.get("inlier")!}
               onChange={modelChange}
             ></ComponentParameter>
           </ModelComponent>
@@ -215,8 +227,8 @@ export default function CurveFit() {
               <ComponentParameter
                 name={n}
                 tex_name={tn}
-                value={modelState.get(n)}
-                posterior_value={posteriorState.get(n)}
+                value={modelState.get(n)!}
+                posterior_value={posteriorState.get(n)!}
                 onChange={modelChange}
               ></ComponentParameter>
             ))}
@@ -295,11 +307,18 @@ function ComponentParameter({
   value,
   posterior_value,
   onChange,
+}: {
+  name: string
+  tex_name: string
+  value: Distribution
+  posterior_value: Distribution
+  onChange: (name: string, innerName: string, value: number) => void
 }) {
   const min = { mu: -2, sigma: 0 }
   const max = { mu: 2, sigma: 2 }
-  const innerParams = ["mu", "sigma"].map((innerName) => {
+  const innerParams = Object.keys(value).map((innerName) => {
     const joint_name = name + "_" + innerName
+    const keyName = innerName as keyof Distribution
     return (
       <>
         <span
@@ -310,19 +329,19 @@ function ComponentParameter({
         ></span>
         <input
           type="range"
-          min={min[innerName as keyof Distribution]}
-          max={max[innerName as keyof Distribution]}
+          min={min[keyName]}
+          max={max[keyName]}
           step=".01"
-          value={value[innerName]}
+          value={value[keyName]}
           id={joint_name}
-          onChange={(e) => onChange(name, innerName, e.target.value)}
+          onChange={(e) => onChange(name, innerName, parseInt(e.target.value))}
         />
         <span id={joint_name + "-value"}>
-          {Number(value[innerName]).toFixed(2)}
+          {Number(value[keyName]).toFixed(2)}
         </span>
         &nbsp;&nbsp;
         <span className="posterior" id={joint_name + "-posterior"}>
-          {Number(posterior_value[innerName]).toFixed(2)}
+          {Number(posterior_value[keyName]).toFixed(2)}
         </span>
         <br />
       </>
@@ -332,7 +351,17 @@ function ComponentParameter({
   return <div className="value-group">{innerParams}</div>
 }
 
-function InferenceUI({ K, N, setK, setN }) {
+function InferenceUI({
+  K,
+  N,
+  setK,
+  setN,
+}: {
+  K: number
+  N: number
+  setK: (k: number) => void
+  setN: (n: number) => void
+}) {
   const ns = [100, 1000, 5000, 10000, 50000, 100000].map((i) => (
     <option key={i} value={i}>
       {i.toLocaleString()}
@@ -359,7 +388,7 @@ function InferenceUI({ K, N, setK, setN }) {
         id="numParticles"
         name="K"
         value={K}
-        onChange={(e) => setK(e.target.value)}
+        onChange={(e) => setK(parseInt(e.target.value))}
       >
         {ks}
       </select>

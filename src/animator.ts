@@ -24,7 +24,7 @@ export interface InferenceReport {
   fps: number
   ips: number
   totalFailedSamples: number
-  posterior: Map<string, RunningStats>
+  pOutlierStats: RunningStats
   autoSIR: boolean
 }
 
@@ -130,11 +130,14 @@ export class Animator {
         if (result) {
           this.totalFailedSamples += result.failedSamples
 
+          const pOutlierStats = new RunningStats()
+
           for (const m of result.selectedModels) {
             let i = 0
             for (const v of this.stats.values()) {
               v.observe(m.model[i++])
             }
+            pOutlierStats.observe(m.p_outlier)
           }
           ++this.frameCount
           const fps = Math.trunc(this.frameCount / ((t - this.t0) / 1e3))
@@ -144,6 +147,7 @@ export class Animator {
             ips: result.ips,
             fps: fps,
             autoSIR: this.autoSIR,
+            pOutlierStats: pOutlierStats,
           }
           this.inferenceReportCallback(info)
           // emptyPosterior.innerText = totalFailedSamples.toString()

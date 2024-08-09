@@ -1,4 +1,4 @@
-import { Distribution } from "./main"
+import { Distribution } from "./animator"
 import { type Model } from "./model"
 import { importanceShader } from "./shaders"
 import { WGL2Helper } from "./webgl"
