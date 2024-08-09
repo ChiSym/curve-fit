@@ -191,8 +191,8 @@ export default function CurveFit() {
             ))}
           </ModelComponent>
           <ModelComponent
-            name="inlier (not working)"
-            enabled={false}
+            name="inlier sigma"
+            enabled={null}
             onChange={() => null}
             equation=""
           >
@@ -276,7 +276,7 @@ function ModelComponent({
   children,
 }: {
   name: string
-  enabled: boolean
+  enabled: boolean | null
   onChange: React.EventHandler<ChangeEvent<HTMLInputElement>>
   equation?: string
   children: React.ReactNode
@@ -284,13 +284,15 @@ function ModelComponent({
   return (
     <div className="modelComponent">
       <div className="prior-component-title">
-        <input
-          className="model-component-enable"
-          id={name + "_enable"}
-          checked={enabled}
-          onChange={onChange}
-          type="checkbox"
-        />
+        {enabled !== null && (
+          <input
+            className="model-component-enable"
+            id={name + "_enable"}
+            checked={enabled}
+            onChange={onChange}
+            type="checkbox"
+          />
+        )}
         {name}
         <div>
           <span className="katex-render" katex-source={equation}></span>
@@ -331,7 +333,7 @@ function ComponentParameter({
           type="range"
           min={min[keyName]}
           max={max[keyName]}
-          step=".01"
+          step="0.1"
           value={value[keyName]}
           id={joint_name}
           onChange={(e) => onChange(name, innerName, parseInt(e.target.value))}
