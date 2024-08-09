@@ -207,8 +207,12 @@ fitted_poly = lambda x: powers_vector(x, max_degree) @ cs
 
 Plot.new([
     Plot.line(list(zip(xs_plot, fitted_poly(xs_plot)))),
+    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
     Plot.dot(list(zip(xs, ys))),
 ])
+# %% [markdown]
+# The dashed curve, used along with noise to produce the data, is only shown to give a sense of scale.  The goal is ***not*** to recover the dashed curve, but instead to ***fit the data***, which neither curve accomplishes exclusively better than the other.
+
 # %% [markdown]
 # ### Gradient descent via noisy curves
 #
@@ -247,6 +251,7 @@ curve_optimized = exponential.curve_from_params(params_optimized)
 
 Plot.new([
     Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
+    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
     Plot.dot(list(zip(xs, ys_observed))),
 ])
 
@@ -269,6 +274,7 @@ curve_optimized = exponential.curve_from_params(params_optimized)
 
 Plot.new([
     Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
+    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
     Plot.dot(list(zip(xs, ys_outlier))),
 ])
 
@@ -297,6 +303,7 @@ curve_optimized = exponential.curve_from_params(params_optimized)
 
 Plot.new([
     Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
+    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
     Plot.dot(list(zip(xs, ys_outlier))),
 ])
 
@@ -317,8 +324,7 @@ sample_curve = periodic.sample(k=jax.random.PRNGKey(4)).get_retval()
 ys_observed = noisy_data_model.sample(sample_curve(xs)).get_retval()[0]
 
 Plot.new([
-    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7")
-] + [
+    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
     Plot.dot(list(zip(xs, ys_observed))),
 ])
 
@@ -344,6 +350,7 @@ Plot.new([
     Plot.line(list(zip(xs_plot, curve(xs_plot))), stroke=i)
     for i, curve in enumerate(curves_optimized)
 ] + [
+    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
     Plot.dot(list(zip(xs, ys_observed))),
 ])
 
