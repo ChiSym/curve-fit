@@ -444,6 +444,15 @@ class CurveDataModel:
             jax.random.split(k, n), ()
         )
 
+    def gradient_ascent_model_params(self, params_guess, kernel_params, xs, ys, N_steps=1000, learning_rate=1e-5):
+        jitted_grad = jax.jit(jax.jacfwd(lambda params: self.log_density(params, kernel_params, xs, ys)))
+
+        params_optimized = params_guess
+        for _ in range(N_steps):
+            params_optimized += learning_rate * jitted_grad(params_optimized)
+
+        return self.curve.curve_from_params(params_optimized)
+
     def log_density(self, curve_params, kernel_params, xs, samples):
         constraint = C.d({
             "curve": C.d({"curve_params": self.curve.constraint_from_params(curve_params)}),

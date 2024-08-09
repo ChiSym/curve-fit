@@ -238,16 +238,10 @@ joint_model = b.CurveDataModel(exponential, noisy_data_model)
 
 a_guess, b_guess = -1.0, -1.0
 params_guess = jnp.array([a_guess, b_guess])
+
 sigma_in = 0.05
-jitted_grad = jax.jit(jax.jacfwd(lambda params: joint_model.log_density(params, sigma_in, xs, ys_observed)))
 
-N_steps, learning_rate = 1000, 1e-5
-params_optimized = params_guess
-for _ in range(N_steps):
-    grad = jitted_grad(params_optimized)
-    params_optimized = params_optimized + learning_rate * grad
-
-curve_optimized = exponential.curve_from_params(params_optimized)
+curve_optimized = joint_model.gradient_ascent_model_params(params_guess, sigma_in, xs, ys_observed)
 
 Plot.new([
     Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
@@ -262,15 +256,7 @@ Plot.new([
 
 # %%
 ys_outlier = ys_observed.at[3].set(0.99)
-jitted_grad = jax.jit(jax.jacfwd(lambda params: joint_model.log_density(params, sigma_in, xs, ys_outlier)))
-
-N_steps, learning_rate = 1000, 1e-5
-params_optimized = params_guess
-for _ in range(N_steps):
-    grad = jitted_grad(params_optimized)
-    params_optimized = params_optimized + learning_rate * grad
-
-curve_optimized = exponential.curve_from_params(params_optimized)
+curve_optimized = joint_model.gradient_ascent_model_params(params_guess, sigma_in, xs, ys_outlier)
 
 Plot.new([
     Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
@@ -284,22 +270,16 @@ Plot.new([
 # %%
 outliers_data_model = b.NoisyOutliersData(sigma_inlier=genjax.uniform(0.0, 0.1), p_outlier=genjax.uniform(0.0, 0.1))
 joint_model_2 = b.CurveDataModel(exponential, outliers_data_model)
+
 p_out = 0.5
 data_params = jnp.array([sigma_in, p_out])
 
-# ***If we knew** how to decide that index `3` was an outlier...
+# ***If we knew** how to decide that index `3` was an outlier,
+# then the density of that value is constant, and there is no correpsonding term in the gradient.
 outliers = jnp.zeros(len(xs), dtype=jnp.int32).at[3].set(1)
 ys_data = (outliers, ys_outlier)
-# ...then the density of that value is constant, and there is no correpsonding term in the gradient.
-jitted_grad = jax.jacfwd(lambda params: joint_model_2.log_density(params, data_params, xs, ys_data))
 
-N_steps, learning_rate = 1000, 1e-5
-params_optimized = params_guess
-for _ in range(N_steps):
-    grad = jitted_grad(params_optimized)
-    params_optimized = params_optimized + learning_rate * grad
-
-curve_optimized = exponential.curve_from_params(params_optimized)
+curve_optimized = joint_model_2.gradient_ascent_model_params(params_guess, data_params, xs, ys_data)
 
 Plot.new([
     Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
@@ -336,15 +316,10 @@ joint_model = b.CurveDataModel(periodic, noisy_data_model)
 jitted_grad = jax.jit(jax.jacfwd(lambda params: joint_model.log_density(params, sigma_in, xs, ys_observed)))
 
 N_fits = 12
-curves_optimized = []
-for params_guess in periodic.sample(N_fits).get_retval().params:
-    N_steps, learning_rate = 1000, 1e-5
-    params_optimized = params_guess
-    for _ in range(N_steps):
-        grad = jitted_grad(params_optimized)
-        params_optimized = params_optimized + learning_rate * grad
-
-    curves_optimized.append(periodic.curve_from_params(params_optimized))
+curves_optimized = [
+    joint_model.gradient_ascent_model_params(params_guess, sigma_in, xs, ys_observed)
+    for params_guess in periodic.sample(N_fits, k=jax.random.PRNGKey(9)).get_retval().params
+]
 
 Plot.new([
     Plot.line(list(zip(xs_plot, curve(xs_plot))), stroke=i)
