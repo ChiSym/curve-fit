@@ -155,10 +155,9 @@ sample_curve = quartic.sample(k=jax.random.PRNGKey(134)).get_retval()
 xs_plot = jnp.linspace(-0.7, 0.7, 100)
 
 xs = jnp.linspace(-0.7, 0.7, 10)
-ys_latent = sample_curve(xs)
 
 noisy_data_model = b.NoisyData(sigma_inlier=genjax.uniform(0.0, 0.1))
-ys_observed = noisy_data_model.sample(ys_latent, 12).get_retval()
+ys_observed = noisy_data_model.sample(sample_curve(xs), 12).get_retval()
 
 Plot.new([
     Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
@@ -223,8 +222,7 @@ Plot.new([
 nonlinear_sample_curve = exponential.sample(k=jax.random.PRNGKey(1)).get_retval()
 print(f"Latent parameters: [a, b] = {nonlinear_sample_curve.params[0]}")
 
-ys_latent = nonlinear_sample_curve(xs)
-ys_observed = noisy_data_model.sample(ys_latent).get_retval()[0]
+ys_observed = noisy_data_model.sample(sample_curve(xs)).get_retval()[0]
 
 Plot.new([
     Plot.line(list(zip(xs_plot, nonlinear_sample_curve(xs_plot))), strokeDasharray="7"),
