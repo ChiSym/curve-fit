@@ -253,24 +253,59 @@ Plot.new([
 ])
 
 # %% [markdown]
-# ### The problem of outliers
+# ### The issue of outliers
 #
 # Blind optimization suffers from sensitivity to outliers in the data.
 
 # %%
-# Example of an outlier throwing off an optimization
+ys_outlier = ys_observed.at[3].set(0.99)
+jitted_grad = jax.jit(jax.jacfwd(lambda params: joint_model.log_density(params, sigma_in, xs, ys_outlier)))
+
+N_steps, learning_rate = 1000, 1e-5
+params_optimized = params_guess
+for _ in range(N_steps):
+    grad = jitted_grad(params_optimized)
+    params_optimized = params_optimized + learning_rate * grad
+
+curve_optimized = exponential.curve_from_params(params_optimized)
+
+Plot.new([
+    Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
+    Plot.dot(list(zip(xs, ys_outlier))),
+])
 
 # %% [markdown]
 # We can instead imagine curves that produce noisy data *including some outliers*.  This intuition can be simply codified into a more sophisticated distribution.
 
 # %%
-# NoisyOutliersCurve object
-# Example of some NoisyOutliersCurve samples = finite point sets, drawn from a single curve at a time
+outliers_data_model = b.NoisyOutliersData(sigma_inlier=genjax.uniform(0.0, 0.1), p_outlier=genjax.uniform(0.0, 0.1))
+joint_model_2 = b.CurveDataModel(exponential, outliers_data_model)
+p_out = 0.5
+data_params = jnp.array([sigma_in, p_out])
+
+# ***If we knew** how to decide that index `3` was an outlier...
+outliers = jnp.zeros(len(xs), dtype=jnp.int32).at[3].set(1)
+ys_data = (outliers, ys_outlier)
+# ...then the density of that value is constant, and there is no correpsonding term in the gradient.
+jitted_grad = jax.jacfwd(lambda params: joint_model_2.log_density(params, data_params, xs, ys_data))
+
+N_steps, learning_rate = 1000, 1e-5
+params_optimized = params_guess
+for _ in range(N_steps):
+    grad = jitted_grad(params_optimized)
+    params_optimized = params_optimized + learning_rate * grad
+
+curve_optimized = exponential.curve_from_params(params_optimized)
+
+Plot.new([
+    Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
+    Plot.dot(list(zip(xs, ys_outlier))),
+])
 
 # %% [markdown]
 # We again get a reasonable notion of how good a fit is (density in the data model).
 #
-# How to optimize in non-differentiable context?
+# But this raises a new question: how to decide which data are declared outliers?  Mathematically, the outlier status assignments describe disconnected spaces of options in the model, and so they are discontinuous variables, and the model is non-differentiable with respect to them.  Gradient descent alone cannot guide us in exploring and optimizing them.
 
 # %% [markdown]
 # ### The issue of multiple modes
