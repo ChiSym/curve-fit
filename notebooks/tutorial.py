@@ -340,16 +340,17 @@ Plot.new([
 # In the above example, we have already (silently) experienced divergence some of the time, embodied by `nan`s:
 
 # %%
-for curve in curves_optimized:
-    print(curve.params)
+jnp.array([curve.params for curve in curves_optimized])
 
 # %% [markdown]
 # By the way, the "optimized" curves do not even necessarily improve the overall fit over the original curve.
 
 # %%
-for c in curves_optimized:
-    print(joint_model.log_density(c.params, sigma_in, xs, ys_observed)
-          - joint_model.log_density(sample_curve.params[0], sigma_in, xs, ys_observed))
+jnp.array([
+    joint_model.log_density(c.params, sigma_in, xs, ys_observed)
+        - joint_model.log_density(sample_curve.params[0], sigma_in, xs, ys_observed)
+    for c in curves_optimized
+])
 
 
 # %% [markdown]
