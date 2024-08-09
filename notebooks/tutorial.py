@@ -344,6 +344,20 @@ for curve in curves_optimized:
     print(curve.params)
 
 # %% [markdown]
+# By the way, the "optimized" curves do not even necessarily improve the overall fit over the original curve.
+
+# %%
+for c in curves_optimized:
+    print(joint_model.log_density(c.params, sigma_in, xs, ys_observed)
+          - joint_model.log_density(sample_curve.params[0], sigma_in, xs, ys_observed))
+
+
+# %% [markdown]
+# ### Honest discussion
+#
+# With effort, people can do gradient descent better.
+
+# %% [markdown]
 # ## Fitting curves to data: conditioning
 #
 # Probability theory is a language that allows a precise form of reasoning about uncertain values.  In short, the object that soundly answers the curve fitting problem is a *probability distribution over curves*, expressing which curves were more likely to have generated the data.  Then our particular answers of best-fit curves are simply the (possibly multitudinous) relatively high-probability samples from this distribution.
@@ -376,7 +390,7 @@ for curve in curves_optimized:
 #
 # First generate plausible but probabilistically skewed data, then must correct them by resampling.
 #
-# One might ask why not just take the single best fit.  Many reasons, starting with multi-modality, and eventually "seeing" the whole space of answers.
+# One might ask why not just take the single best fit.  Many reasons, starting with multi-modality, and eventually "seeing" more of the space of answers.
 
 # %%
 # Importance sampling examples
