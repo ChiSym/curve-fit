@@ -161,32 +161,32 @@ class Pointwise(Block):
     # NB: These are not commutative, even if the underlying binary operation is,
     # due to the way randomness is threaded through the operands.
     def __init__(
-        self, f: Block, g: Block, op: Callable[[ArrayLike, ArrayLike], FloatArray]
+        self, l: Block, r: Block, op: Callable[[ArrayLike, ArrayLike], FloatArray]
     ):
-        self.f = f
-        self.g = g
+        self.l = l
+        self.r = r
 
         @genjax.gen
         def params_distribution():
-            return f.params_distribution() @ "l", g.params_distribution() @ "r"
+            return l.params_distribution() @ "l", r.params_distribution() @ "r"
 
         def function_family(params, x):
-            params_f, params_g = params
-            return op(f.function_family(params_f, x), g.function_family(params_g, x))
+            params_l, params_r = params
+            return op(l.function_family(params_l, x), r.function_family(params_r, x))
 
         super().__init__(params_distribution, function_family)
 
     def constraint_from_params(self, params):
-        params_f, params_g = params
+        params_l, params_r = params
         return C.d({
-            "l": self.f.constraint_from_params(params_f),
-            "r": self.g.constraint_from_params(params_g)
+            "l": self.l.constraint_from_params(params_l),
+            "r": self.r.constraint_from_params(params_r)
         })
 
     def address_segments(self):
-        for s in self.f.address_segments():
+        for s in self.l.address_segments():
             yield ("l",) + s
-        for s in self.g.address_segments():
+        for s in self.r.address_segments():
             yield ("r",) + s
 
 
@@ -194,31 +194,31 @@ class Compose(Block):
     """Combines two blocks using function compostion. `Compose(f, g)` represents
     `f(g(_))`."""
 
-    def __init__(self, f: Block, g: Block):
-        self.f = f
-        self.g = g
+    def __init__(self, l: Block, r: Block):
+        self.l = l
+        self.r = r
 
         @genjax.gen
         def params_distribution():
-            return f.params_distribution() @ "l", g.params_distribution() @ "r"
+            return l.params_distribution() @ "l", r.params_distribution() @ "r"
 
         def function_family(params, x):
-            params_f, params_g = params
-            return f.function_family(params_f, g.function_family(params_g, x))
+            params_l, params_r = params
+            return l.function_family(params_l, r.function_family(params_r, x))
 
         super().__init__(params_distribution, function_family)
 
     def constraint_from_params(self, params):
-        params_f, params_g = params
+        params_l, params_r = params
         return C.d({
-            "l": self.f.constraint_from_params(params_f),
-            "r": self.g.constraint_from_params(params_g)
+            "l": self.l.constraint_from_params(params_l),
+            "r": self.r.constraint_from_params(params_r)
         })
 
     def address_segments(self):
-        for s in self.f.address_segments():
+        for s in self.l.address_segments():
             yield ("l",) + s
-        for s in self.g.address_segments():
+        for s in self.r.address_segments():
             yield ("r",) + s
 
 
