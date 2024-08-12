@@ -279,6 +279,7 @@ data_params = jnp.array([sigma_in, p_out])
 outliers = jnp.zeros(len(xs), dtype=jnp.int32).at[3].set(1)
 ys_data = (outliers, ys_outlier)
 
+# Does not run: see GEN-433
 curve_optimized = joint_model_2.gradient_ascent_model_params(params_guess, data_params, xs, ys_data)
 
 Plot.new([
