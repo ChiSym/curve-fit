@@ -7,7 +7,7 @@ import { InferenceParameters } from "./gpgpu.ts"
 import { RunningStats } from "./stats.ts"
 
 class DistributionShape {
-  public readonly name : string
+  public readonly name: string
   public readonly parameterName: string[]
   constructor(name: string, parameterName: string[]) {
     this.name = name
@@ -24,7 +24,9 @@ export class XDistribution {
   constructor(shape: DistributionShape, parameters: number[]) {
     this.shape = shape
     if (parameters.length != this.shape.parameterName.length) {
-      throw new Error(`incorrect number of paramters for ${this.shape.name} distribution: ${parameters.length} != ${this.shape.parameterName.length}`)
+      throw new Error(
+        `incorrect number of paramters for ${this.shape.name} distribution: ${parameters.length} != ${this.shape.parameterName.length}`,
+      )
     }
     this.parameters = new Map()
     for (let i = 0; i < parameters.length; ++i) {
@@ -45,7 +47,8 @@ export class XDistribution {
   }
 }
 
-export const Normal = (mu: number, sigma: number) => new XDistribution(NormalDistributionShape, [mu, sigma])
+export const Normal = (mu: number, sigma: number) =>
+  new XDistribution(NormalDistributionShape, [mu, sigma])
 
 export const modelParams: Map<string, XDistribution> = new Map([
   ["a_0", Normal(0, 2)],
@@ -182,10 +185,10 @@ export default function CurveFit() {
       <br />
       IPS: <span id="ips">{(ips / 1e6).toFixed(2) + " M"}</span>
       <br />
-      {(outlier.get('mu') || outlier.get('sigma')) && (
+      {(outlier.get("mu") || outlier.get("sigma")) && (
         <span id="outlier">
-          p<sub>outlier</sub> = {outlier.get('mu').toFixed(2)} &plusmn;{" "}
-          {outlier.get('sigma').toFixed(2)}
+          p<sub>outlier</sub> = {outlier.get("mu").toFixed(2)} &plusmn;{" "}
+          {outlier.get("sigma").toFixed(2)}
         </span>
       )}
       <InferenceUI
@@ -378,9 +381,7 @@ function ComponentParameter({
           id={joint_name}
           onChange={(e) => onChange(name, innerName, Number(e.target.value))}
         />
-        <span id={joint_name + "-value"}>
-          {value.get(keyName).toFixed(2)}
-        </span>
+        <span id={joint_name + "-value"}>{value.get(keyName).toFixed(2)}</span>
         &nbsp;&nbsp;
         <span className="posterior" id={joint_name + "-posterior"}>
           {posterior_value.get(keyName).toFixed(2)}
