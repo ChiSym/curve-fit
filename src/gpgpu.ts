@@ -1,4 +1,4 @@
-import { Distribution } from "./animator"
+import { XDistribution } from "./App"
 import { type Model } from "./model"
 import { importanceShader } from "./shaders"
 import { WGL2Helper } from "./webgl"
@@ -12,7 +12,7 @@ export interface ResultBatch {
 
 export interface ModelParameters {
   points: number[][]
-  coefficients: Map<string, Distribution>
+  coefficients: Map<string, XDistribution>
   component_enable: Map<string, boolean>
 }
 
@@ -160,11 +160,11 @@ export class GPGPU_Inference {
 
     gl.uniform1fv(
       this.alphaLocLoc,
-      Array.from(parameters.coefficients.values()).map((v) => v.mu),
+      Array.from(parameters.coefficients.values()).map((v) => v.get('mu')),
     )
     gl.uniform1fv(
       this.alphaScaleLoc,
-      Array.from(parameters.coefficients.values()).map((c) => c.sigma),
+      Array.from(parameters.coefficients.values()).map((c) => c.get('sigma')),
     )
 
     let enableBits = 0

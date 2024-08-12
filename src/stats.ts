@@ -1,3 +1,5 @@
+import { Normal, XDistribution } from "./App"
+
 export interface NormalParams {
   mu: number
   sigma: number
@@ -23,11 +25,8 @@ export class RunningStats {
     this.m2 += delta * delta2
   }
 
-  summarize(): NormalParams {
-    return {
-      mu: this.mean,
-      sigma: Math.sqrt(this.m2 / (this.count - 1)),
-    }
+  summarize(): XDistribution {
+    return Normal(this.mean, Math.sqrt(this.m2 / (this.count - 1)))
   }
 
   reset(): void {

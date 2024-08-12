@@ -1,19 +1,60 @@
 import "./App.css"
-import { Animator, Distribution, InferenceReport } from "./animator.ts"
+import { Animator, InferenceReport } from "./animator.ts"
 import { useState, useEffect, useRef, ChangeEvent } from "react"
 import throttle from "lodash.throttle"
 import katex from "katex"
 import { InferenceParameters } from "./gpgpu.ts"
 import { RunningStats } from "./stats.ts"
 
-export const modelParams: Map<string, Distribution> = new Map([
-  ["a_0", { mu: 0, sigma: 2 }],
-  ["a_1", { mu: 0, sigma: 2 }],
-  ["a_2", { mu: 0, sigma: 2 }],
-  ["omega", { mu: 0, sigma: 2 }],
-  ["A", { mu: 0, sigma: 2 }],
-  ["phi", { mu: 0, sigma: 2 }],
-  ["inlier", { mu: 0.3, sigma: 0.07 }], // TODO: change to uniform
+class DistributionShape {
+  public readonly name : string
+  public readonly parameterName: string[]
+  constructor(name: string, parameterName: string[]) {
+    this.name = name
+    this.parameterName = parameterName
+  }
+}
+
+const NormalDistributionShape = new DistributionShape("normal", ["mu", "sigma"])
+
+export class XDistribution {
+  public readonly shape: DistributionShape
+  public readonly parameters: Map<string, number>
+
+  constructor(shape: DistributionShape, parameters: number[]) {
+    this.shape = shape
+    if (parameters.length != this.shape.parameterName.length) {
+      throw new Error(`incorrect number of paramters for ${this.shape.name} distribution: ${parameters.length} != ${this.shape.parameterName.length}`)
+    }
+    this.parameters = new Map()
+    for (let i = 0; i < parameters.length; ++i) {
+      this.parameters.set(this.shape.parameterName[i], parameters[i])
+    }
+  }
+  public get(pName: string): number {
+    return this.parameters.get(pName)!
+  }
+  public set(pName: string, value: number) {
+    return this.parameters.set(pName, value)
+  }
+  public clone(): XDistribution {
+    return new XDistribution(this.shape, Array.from(this.parameters.values()))
+  }
+  public getParameterNames(): string[] {
+    return this.shape.parameterName
+  }
+}
+
+export const Normal = (mu: number, sigma: number) => new XDistribution(NormalDistributionShape, [mu, sigma])
+
+export const modelParams: Map<string, XDistribution> = new Map([
+  ["a_0", Normal(0, 2)],
+  ["a_1", Normal(0, 2)],
+  ["a_2", Normal(0, 2)],
+  ["omega", Normal(0, 2)],
+  ["A", Normal(0, 2)],
+  ["phi", Normal(0, 2)],
+  ["inlier", Normal(0.3, 0.07)], // TODO: change to uniform
 ])
 
 const defaultInferenceParameters: InferenceParameters = {
@@ -54,14 +95,13 @@ export default function CurveFit() {
 
   function modelChange(k1: string, k2: string, v: number) {
     console.log(`${k1}_${k2} -> ${v}`)
-    const old_value = modelState.get(k1)
-    const updated_value = Object.assign({}, old_value)
-    updated_value[k2 as keyof typeof updated_value] = v
+    const updated_value = modelState.get(k1)!.clone()
+    updated_value.set(k2, v)
     setModelState(new Map(modelState.entries()).set(k1, updated_value))
     animatorRef.current.setModelParameters(modelState)
   }
 
-  const [outlier, setOutlier] = useState({ mu: 0, sigma: 0 })
+  const [outlier, setOutlier] = useState(Normal(0, 0))
   const setPOutlier = throttle((outlierStats: RunningStats) => {
     setOutlier(outlierStats.summarize())
   }, 250)
@@ -142,10 +182,10 @@ export default function CurveFit() {
       <br />
       IPS: <span id="ips">{(ips / 1e6).toFixed(2) + " M"}</span>
       <br />
-      {(outlier.mu || outlier.sigma) && (
+      {(outlier.get('mu') || outlier.get('sigma')) && (
         <span id="outlier">
-          p<sub>outlier</sub> = {outlier.mu.toFixed(2)} &plusmn;{" "}
-          {outlier.sigma.toFixed(2)}
+          p<sub>outlier</sub> = {outlier.get('mu').toFixed(2)} &plusmn;{" "}
+          {outlier.get('sigma').toFixed(2)}
         </span>
       )}
       <InferenceUI
@@ -312,15 +352,15 @@ function ComponentParameter({
 }: {
   name: string
   tex_name: string
-  value: Distribution
-  posterior_value: Distribution
+  value: XDistribution
+  posterior_value: XDistribution
   onChange: (name: string, innerName: string, value: number) => void
 }) {
   const min = { mu: -2, sigma: 0 }
   const max = { mu: 2, sigma: 2 }
-  const innerParams = Object.keys(value).map((innerName) => {
+  const innerParams = value.getParameterNames().map((innerName) => {
     const joint_name = name + "_" + innerName
-    const keyName = innerName as keyof Distribution
+    const keyName = innerName
     return (
       <>
         <span
@@ -331,19 +371,19 @@ function ComponentParameter({
         ></span>
         <input
           type="range"
-          min={min[keyName]}
-          max={max[keyName]}
+          min={min[keyName as keyof typeof min]}
+          max={max[keyName as keyof typeof min]}
           step={0.1}
-          value={value[keyName]}
+          value={value.get(keyName)}
           id={joint_name}
           onChange={(e) => onChange(name, innerName, Number(e.target.value))}
         />
         <span id={joint_name + "-value"}>
-          {Number(value[keyName]).toFixed(2)}
+          {value.get(keyName).toFixed(2)}
         </span>
         &nbsp;&nbsp;
         <span className="posterior" id={joint_name + "-posterior"}>
-          {Number(posterior_value[keyName]).toFixed(2)}
+          {posterior_value.get(keyName).toFixed(2)}
         </span>
         <br />
       </>

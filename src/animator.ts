@@ -1,11 +1,7 @@
+import { XDistribution } from "./App.tsx"
 import { GPGPU_Inference, InferenceParameters } from "./gpgpu.ts"
 import { Render } from "./render.ts"
 import { RunningStats } from "./stats.ts"
-
-export interface Distribution {
-  mu: number
-  sigma: number
-}
 
 function log(level: string, message: unknown): void {
   if (level === "error") {
@@ -29,7 +25,7 @@ export interface InferenceReport {
 }
 
 export class Animator {
-  private modelParameters: Map<string, Distribution>
+  private modelParameters: Map<string, XDistribution>
   private readonly inferenceParameters: InferenceParameters
   private readonly inferenceReportCallback: (r: InferenceReport) => void
   private readonly stats: Map<string, RunningStats>
@@ -45,7 +41,7 @@ export class Animator {
   // engine code to take multiple parameters, giving up old name
 
   constructor(
-    modelParameters: Map<string, Distribution>,
+    modelParameters: Map<string, XDistribution>,
     inferenceParameters: InferenceParameters,
     inferenceReportCallback: (r: InferenceReport) => void,
   ) {
@@ -64,10 +60,8 @@ export class Animator {
     this.inferenceParameters.numParticles = ps.numParticles
   }
 
-  public setModelParameters(params: Map<string, Distribution>) {
-    this.modelParameters = new Map(
-      Array.from(params.entries()).map(([k, v]) => [k, Object.assign({}, v)]),
-    )
+  public setModelParameters(params: Map<string, XDistribution>) {
+    this.modelParameters = new Map(params)
     this.stats.forEach((s) => s.reset())
   }
 
@@ -87,7 +81,7 @@ export class Animator {
     this.componentEnable = new Map(componentEnable.entries())
   }
 
-  public getPosterior(): Map<string, Distribution> {
+  public getPosterior(): Map<string, XDistribution> {
     return new Map(
       Array.from(this.stats.entries()).map(([k, v]) => [k, v.summarize()]),
     )
