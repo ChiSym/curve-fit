@@ -30,10 +30,32 @@ body {
   min-height: 100vh;
 }
 
-body #controls {
+#model-components {
   text-align: left;
+  grid-template-columns: 280px 280px;
+  column-gap: 1em;
+  display: grid;
 }
 
+.prior-component-title {
+  text-align: center;
+  font-weight: bold;
+  background-color: #ccc;
+}
+
+#inference-parameters {
+  margin: 4px;
+}
+
+#empty-posterior {
+  color: red;
+}
+.value-group {
+  background-color: #cde;
+  border-radius: 8px;
+  margin: 4px;
+  padding: 2px;
+}
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
@@ -106,5 +128,11 @@ button:focus-visible {
   }
   button {
     background-color: #f9f9f9;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  div#model-components {
+    color: #222;
   }
 }

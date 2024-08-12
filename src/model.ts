@@ -5,9 +5,7 @@ export interface Normal {
 
 export interface Model {
   model: Float32Array
-  outliers: number
-  weight: number
-  params: Float32Array
+  outlier: number
+  log_weight: number
+  p_outlier: number
 }
-
-export const MODEL_SIZE = 3
