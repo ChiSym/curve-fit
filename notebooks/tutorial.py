@@ -274,8 +274,8 @@ joint_model_2 = b.CurveDataModel(exponential, outliers_data_model)
 p_out = 0.5
 data_params = jnp.array([sigma_in, p_out])
 
-# ***If we knew** how to decide that index `3` was an outlier,
-# then the density of that value is constant, and there is no correpsonding term in the gradient.
+# ***If we knew** how to decide that index `3` was an outlier, then upon declaring it as such,
+# its contribution to the density is constant, and there is no correpsonding term in the gradient.
 outliers = jnp.zeros(len(xs), dtype=jnp.int32).at[3].set(1)
 ys_data = (outliers, ys_outlier)
 
@@ -356,7 +356,7 @@ jnp.array([
 # %% [markdown]
 # ### Honest discussion
 #
-# With effort, people can do gradient descent better.
+# With effort, people can do gradient descent better than this.
 
 # %% [markdown]
 # ## Fitting curves to data: conditioning
@@ -367,24 +367,25 @@ jnp.array([
 #
 # Bayesian reasoning is a framework that starts with the following assumptions.
 # * The first input is a *prior distribution* over hypotheses, which expresses which ones we are willing to consider, and how relatively willing we are to consider them, in advance of seeing the data set.  We package all of our knowledge or ignorance about which hypotheses will be relevant into this.
-#   *  In our case study, the hypotheses are curves, and each Block expresses a prior over curves.
+#   *  In our case study, the hypotheses are curves, and each `Block` instance expresses a prior over curves.
 # * The second input is called the *likelihood kernel*, and it expresses how likey any observed data should be, given which hypothesis holds.  In other words, it is a function from hypotheses to probability distributions over data.
-#   *  In our case study, a likelihood is supplied by one of our data models, with just noise, or noise plus outliers.
+#   *  In our case study, a likelihood is supplied by one of our data models, e.g. `NoisyData` or `NoisyOutlierData`.
 # * The third input is the new information of the *data*.
 #
 # Given the fact that we have observed the data, how ought we update our beliefs about our hypotheses?  What new probability distribution, call it the *posterior distribution*, over hypotheses expresses these updated beliefs?  In order to answer, we make the following constructions.
-# * The prior and the likelihood assemble into a *joint distribution* which expresses the total probability of an experiment in which both a hypothesis holds and the particular data were observed.
+# * The prior and the likelihood assemble into a *joint distribution* which expresses the total probability of an experiment in which both a particular hypothesis is manifest and the particular data were observed.
 #   * Numerically it simply computes the product of the prior probability and the likelihood probability.
+#   * In our case study, a joint model is captured by a `CurveDataModel` instance.
 # * The joint distribution is used to define the *marginal distribution*, which is a probability distribution over the data.  It expresses our total belief of how likely we should believe a data will be observed, upon averaging (according to our prior beliefs) over all hypotheses that might lead to them being observed.
-#   * Numerically it is a sum/integral over hypotheses with respect to the prior.
-# * The joint and the marginal are together used to define the *conditional distribution* over hypotheses given the data.  The conditional density of some hypothesis given some observed data is proportional to the joint probability of the two.  It simply needs to be renormalized so that the total probability of the hypotheses with the given data is again $1$.  This works out to be:
+#   * Numerically it is a sum/integral of likelihoods, summed/integrated over hypotheses with respect to the prior.
+# * The joint and the marginal are together used to define the *conditional distributions* over hypotheses given data values.  The conditional density of some hypothesis given some observed data is proportional to the joint probability of the two.  It simply needs to be renormalized so that the total probability of the hypotheses with the given data is again $1$.  This works out to be:
 #   * Numerically, the conditional probability of a hypothesis is equal to its joint probability together with the data, divided by the marginal probability of the data.
 #
-# The Bayesian view is that the posterior distribution is none other than the conditional distribution.
+# The Bayesian view is that the posterior distribution is none other than the conditional distribution for the observed data.
 #
 # The art of *implementing* conditioning is what we call *Bayesian inference*.  In particular, generating samples from the conditional distribution is precisely the same as inferring which hypotheses are good fits to the observations.
 #
-# In general, exact inference is computationally hard-to-impossible, and better approxiamations require more compute; herein lies the ProbProgrammer's design space.
+# In general, exact inference is computationally hard-to-impossible, and better approximations require more compute; herein lies the ProbProgrammer's design space.
 
 # %% [markdown]
 # ### Inference 1: needle in haystack
