@@ -22,10 +22,12 @@ class Block:
     function_family: Callable # type: ignore
     gf: GenerativeFunction
     jitted_sample: Callable # type: ignore
+    address_segments: List[Tuple]
 
-    def __init__(self, params_distribution, function_family):
+    def __init__(self, params_distribution, function_family, address_segments):
         self.params_distribution = params_distribution
         self.function_family = function_family
+        self.address_segments = address_segments
 
         @genjax.gen
         def gf():
@@ -55,9 +57,6 @@ class Block:
 
     def __matmul__(self, b: "Block"):
         return Compose(self, b)
-
-    def address_segments(self) -> Generator[Tuple, None, None]:
-        raise NotImplementedError()
 
 
 @pz.pytree_dataclass
@@ -95,13 +94,12 @@ class Polynomial(Block):
             powers = jnp.pow(jnp.array(x)[jnp.newaxis].T, jnp.arange(deg))
             return powers @ params.T
 
-        super().__init__(params_distribution, function_family)
+        address_segments = [("p", ..., "coefficient")]
+
+        super().__init__(params_distribution, function_family, address_segments)
 
     def constraint_from_params(self, params):
         return C["p", jnp.arange(len(params)), "coefficient"].set(params)
-
-    def address_segments(self):
-        yield ("p", ..., "coefficient")
 
 
 class Periodic(Block):
@@ -120,16 +118,13 @@ class Periodic(Block):
             amplitude, phase, frequency = params.T
             return amplitude * jnp.sin(2 * math.pi * frequency * (x + phase))
 
-        super().__init__(params_distribution, function_family)
+        address_segments = [("a",), ("φ",), ("ω",)]
+
+        super().__init__(params_distribution, function_family, address_segments)
 
     def constraint_from_params(self, params):
         amplitude, phase, frequency = params.T
         return C.d({"a": amplitude, "φ": phase, "ω": frequency})
-
-    def address_segments(self):
-        yield ("a",)
-        yield ("φ",)
-        yield ("ω",)
 
 
 class Exponential(Block):
@@ -142,15 +137,13 @@ class Exponential(Block):
             a, b = params.T
             return a * jnp.exp(b * x)
 
-        super().__init__(params_distribution, function_family)
+        address_segments = [("a",), ("b",)]
+
+        super().__init__(params_distribution, function_family, address_segments)
 
     def constraint_from_params(self, params):
         a, b = params.T
         return C.d({"a": a, "b": b})
-
-    def address_segments(self):
-        yield ("a",)
-        yield ("b",)
 
 
 class Pointwise(Block):
@@ -174,7 +167,12 @@ class Pointwise(Block):
             params_l, params_r = params
             return op(l.function_family(params_l, x), r.function_family(params_r, x))
 
-        super().__init__(params_distribution, function_family)
+        address_segments = (
+            [("l",) + s for s in self.l.address_segments]
+            + [("r",) + s for s in self.l.address_segments]
+        )
+
+        super().__init__(params_distribution, function_family, address_segments)
 
     def constraint_from_params(self, params):
         params_l, params_r = params
@@ -182,12 +180,6 @@ class Pointwise(Block):
             "l": self.l.constraint_from_params(params_l),
             "r": self.r.constraint_from_params(params_r)
         })
-
-    def address_segments(self):
-        for s in self.l.address_segments():
-            yield ("l",) + s
-        for s in self.r.address_segments():
-            yield ("r",) + s
 
 
 class Compose(Block):
@@ -206,7 +198,12 @@ class Compose(Block):
             params_l, params_r = params
             return l.function_family(params_l, r.function_family(params_r, x))
 
-        super().__init__(params_distribution, function_family)
+        address_segments = (
+            [("l",) + s for s in self.l.address_segments]
+            + [("r",) + s for s in self.l.address_segments]
+        )
+
+        super().__init__(params_distribution, function_family, address_segments)
 
     def constraint_from_params(self, params):
         params_l, params_r = params
@@ -214,12 +211,6 @@ class Compose(Block):
             "l": self.l.constraint_from_params(params_l),
             "r": self.r.constraint_from_params(params_r)
         })
-
-    def address_segments(self):
-        for s in self.l.address_segments():
-            yield ("l",) + s
-        for s in self.r.address_segments():
-            yield ("r",) + s
 
 
 class CurveFit:
@@ -271,7 +262,7 @@ class CurveFit:
         self.gf = model
         self.curve = curve
         self.jitted_importance = jax.jit(self.gf.importance)
-        self.coefficient_paths = [("curve", "curve_params") + p for p in self.curve.address_segments()]
+        self.coefficient_paths = [("curve", "curve_params") + p for p in self.curve.address_segments]
         self.categorical_sampler = jax.jit(genjax.categorical.sampler)
 
     def importance_sample(
@@ -435,7 +426,7 @@ class CurveDataModel:
         self.jitted_sample = jax.jit(gf.simulate)
         self.jitted_importance = jax.jit(gf.importance)
 
-        self.coefficient_paths = [("curve", "curve_params") + p for p in curve.address_segments()]
+        self.coefficient_paths = [("curve", "curve_params") + p for p in curve.address_segments]
 
     def sample(self, n: int = 1, k: PRNGKey = jax.random.PRNGKey(0)):
         return jax.vmap(
