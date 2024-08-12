@@ -81,12 +81,14 @@ Plot.histogram(u.repeat(n=1000).simulate(key=subkey, args=()).get_retval())
 # %%
 exponential = b.Exponential(a=genjax.normal(0.0, 1.0), b=genjax.normal(0.0, 1.0))
 
-exponential2 = b.Exponential(a=genjax.normal(1.0,0.1), b = genjax.normal(1.0, 0.1))
+exponential2 = b.Exponential(a=genjax.normal(1.0, 0.1), b=genjax.normal(1.0, 0.1))
 
 # plot some samples...
 
-( b.plot_functions(exponential.sample(100).get_retval())
- & b.plot_functions(exponential2.sample(100).get_retval()) )
+(
+    b.plot_functions(exponential.sample(100).get_retval())
+    & b.plot_functions(exponential2.sample(100).get_retval())
+)
 
 # %% [markdown]
 # Similarly for sinusoidal functions $f(x) = a \sin(2\pi\omega\,(x + \varphi))$.
@@ -113,10 +115,13 @@ quadratic = b.Polynomial(max_degree=2, coefficient_d=genjax.normal(0.0, 2.0))
 cubic = b.Polynomial(max_degree=3, coefficient_d=genjax.normal(0.0, 2.0))
 quartic = b.Polynomial(max_degree=4, coefficient_d=genjax.normal(0.0, 2.0))
 
-functools.reduce(lambda a, b: a & b, [
-    b.plot_functions(f.sample(25).get_retval())
-    for f in [constant, linear, quadratic, cubic, quartic]
-])
+functools.reduce(
+    lambda a, b: a & b,
+    [
+        b.plot_functions(f.sample(25).get_retval())
+        for f in [constant, linear, quadratic, cubic, quartic]
+    ],
+)
 # %% [markdown]
 # ### Combining distributions over curves
 #
@@ -129,10 +134,10 @@ wiggly_line = linear + periodic
 swoosh = periodic @ quadratic
 zap = exponential * (periodic @ exponential)
 
-functools.reduce(lambda a, b: a & b, [
-    b.plot_functions(f.sample(25).get_retval())
-    for f in [wiggly_line, swoosh, zap]
-])
+functools.reduce(
+    lambda a, b: a & b,
+    [b.plot_functions(f.sample(25).get_retval()) for f in [wiggly_line, swoosh, zap]],
+)
 
 # %% [markdown]
 # ## Fitting curves to data: optimization
@@ -159,12 +164,12 @@ xs = jnp.linspace(-0.7, 0.7, 10)
 noisy_data_model = b.NoisyData(sigma_inlier=genjax.uniform(0.0, 0.1))
 ys_observed = noisy_data_model.sample(sample_curve(xs), 12).get_retval()
 
-Plot.new([
-    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
-] + [
-    Plot.dot(list(zip(xs, ys)), stroke=i)
-    for i, ys in enumerate(ys_observed)
-])
+Plot.new(
+    [
+        Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
+    ]
+    + [Plot.dot(list(zip(xs, ys)), stroke=i) for i, ys in enumerate(ys_observed)]
+)
 
 # %% [markdown]
 # ### Classic technique: least squares
@@ -182,21 +187,26 @@ xs_augmented = jnp.vstack([jnp.ones(len(xs)), xs]).T
 # Find the least squares fit to the system of equations
 # [c0, c1] dot [1, x_i] == c0 + c1 x_i == y_i.
 c0, c1 = jnp.linalg.lstsq(xs_augmented, ys)[0]
-line = lambda x: c0 + c1*x
+line = lambda x: c0 + c1 * x
 
-Plot.new([
-    Plot.line(list(zip(xs_plot, line(xs_plot)))),
-    Plot.dot(list(zip(xs, ys))),
-])
+Plot.new(
+    [
+        Plot.line(list(zip(xs_plot, line(xs_plot)))),
+        Plot.dot(list(zip(xs, ys))),
+    ]
+)
 # %% [markdown]
 # Sometimes least squares fitting may be hijacked to solve other problems.  For instance, suppose we wanted to fit a polynomial curve of fixed degree $d$ to some data $(x_i,y_i)$ for $i=1,\ldots,N$.  The right hand side of the desired equation $y = a_d x^d + a_{d-1} x^{d-1} + \cdots + a_1 x + a_0$ may be a polynomial in $x$, but it is a *linear function of the powers of $x$*.  Therefore we can perform least squares fitting on the data $(\vec x_i,y_i)$ where $\vec x_i$ is the vector of powers of $x_i$.
 
 # %%
 max_degree = 4
 
+
 # Form the matrix whose rows are the power-vectors [1, x_i, x_i**2, ..., x_i**d]...
 def powers_vector(x, max_degree):
     return jnp.pow(jnp.array(x)[jnp.newaxis].T, jnp.arange(max_degree + 1))
+
+
 # ...with max_degree=4 (quartic)
 xs_powers = powers_vector(xs, max_degree)
 
@@ -205,11 +215,13 @@ xs_powers = powers_vector(xs, max_degree)
 cs = jnp.linalg.lstsq(xs_powers, ys)[0]
 fitted_poly = lambda x: powers_vector(x, max_degree) @ cs
 
-Plot.new([
-    Plot.line(list(zip(xs_plot, fitted_poly(xs_plot)))),
-    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
-    Plot.dot(list(zip(xs, ys))),
-])
+Plot.new(
+    [
+        Plot.line(list(zip(xs_plot, fitted_poly(xs_plot)))),
+        Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
+        Plot.dot(list(zip(xs, ys))),
+    ]
+)
 # %% [markdown]
 # The dashed curve, used along with noise to produce the data, is only shown to give a sense of scale.  The goal is ***not*** to recover the dashed curve, but instead to ***fit the data***, which neither curve accomplishes exclusively better than the other.
 
@@ -228,10 +240,12 @@ print(f"Latent parameters: [a, b] = {sample_curve.params[0]}")
 
 ys_observed = noisy_data_model.sample(sample_curve(xs)).get_retval()[0]
 
-Plot.new([
-    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
-    Plot.dot(list(zip(xs, ys_observed))),
-])
+Plot.new(
+    [
+        Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
+        Plot.dot(list(zip(xs, ys_observed))),
+    ]
+)
 
 # %%
 joint_model = b.CurveDataModel(exponential, noisy_data_model)
@@ -241,13 +255,17 @@ params_guess = jnp.array([a_guess, b_guess])
 
 sigma_in = 0.05
 
-curve_optimized = joint_model.gradient_ascent_model_params(params_guess, sigma_in, xs, ys_observed)
+curve_optimized = joint_model.gradient_ascent_model_params(
+    params_guess, sigma_in, xs, ys_observed
+)
 
-Plot.new([
-    Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
-    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
-    Plot.dot(list(zip(xs, ys_observed))),
-])
+Plot.new(
+    [
+        Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
+        Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
+        Plot.dot(list(zip(xs, ys_observed))),
+    ]
+)
 
 # %% [markdown]
 # ### The issue of outliers
@@ -256,19 +274,25 @@ Plot.new([
 
 # %%
 ys_outlier = ys_observed.at[3].set(0.99)
-curve_optimized = joint_model.gradient_ascent_model_params(params_guess, sigma_in, xs, ys_outlier)
+curve_optimized = joint_model.gradient_ascent_model_params(
+    params_guess, sigma_in, xs, ys_outlier
+)
 
-Plot.new([
-    Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
-    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
-    Plot.dot(list(zip(xs, ys_outlier))),
-])
+Plot.new(
+    [
+        Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
+        Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
+        Plot.dot(list(zip(xs, ys_outlier))),
+    ]
+)
 
 # %% [markdown]
 # We can instead imagine curves that produce noisy data *including some outliers*.  This intuition can be simply codified into a more sophisticated distribution.
 
 # %%
-outliers_data_model = b.NoisyOutliersData(sigma_inlier=genjax.uniform(0.0, 0.1), p_outlier=genjax.uniform(0.0, 0.1))
+outliers_data_model = b.NoisyOutliersData(
+    sigma_inlier=genjax.uniform(0.0, 0.1), p_outlier=genjax.uniform(0.0, 0.1)
+)
 joint_model_2 = b.CurveDataModel(exponential, outliers_data_model)
 
 p_out = 0.5
@@ -280,13 +304,17 @@ outliers = jnp.zeros(len(xs), dtype=jnp.int32).at[3].set(1)
 ys_data = (outliers, ys_outlier)
 
 # Does not run: see GEN-433
-curve_optimized = joint_model_2.gradient_ascent_model_params(params_guess, data_params, xs, ys_data)
+curve_optimized = joint_model_2.gradient_ascent_model_params(
+    params_guess, data_params, xs, ys_data
+)
 
-Plot.new([
-    Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
-    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
-    Plot.dot(list(zip(xs, ys_outlier))),
-])
+Plot.new(
+    [
+        Plot.line(list(zip(xs_plot, curve_optimized(xs_plot)))),
+        Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
+        Plot.dot(list(zip(xs, ys_outlier))),
+    ]
+)
 
 # %% [markdown]
 # We again get a reasonable notion of how good a fit is (density in the data model).
@@ -304,31 +332,42 @@ Plot.new([
 sample_curve = periodic.sample(k=jax.random.PRNGKey(4)).get_retval()
 ys_observed = noisy_data_model.sample(sample_curve(xs)).get_retval()[0]
 
-Plot.new([
-    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
-    Plot.dot(list(zip(xs, ys_observed))),
-])
+Plot.new(
+    [
+        Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
+        Plot.dot(list(zip(xs, ys_observed))),
+    ]
+)
 
 # %% [markdown]
 # Often trying to fit these same data from different starting points arrives at different results:
 
 # %%
 joint_model = b.CurveDataModel(periodic, noisy_data_model)
-jitted_grad = jax.jit(jax.jacfwd(lambda params: joint_model.log_density(params, sigma_in, xs, ys_observed)))
+jitted_grad = jax.jit(
+    jax.jacfwd(
+        lambda params: joint_model.log_density(params, sigma_in, xs, ys_observed)
+    )
+)
 
 N_fits = 12
 curves_optimized = [
     joint_model.gradient_ascent_model_params(params_guess, sigma_in, xs, ys_observed)
-    for params_guess in periodic.sample(N_fits, k=jax.random.PRNGKey(9)).get_retval().params
+    for params_guess in periodic.sample(N_fits, k=jax.random.PRNGKey(9))
+    .get_retval()
+    .params
 ]
 
-Plot.new([
-    Plot.line(list(zip(xs_plot, curve(xs_plot))), stroke=i)
-    for i, curve in enumerate(curves_optimized)
-] + [
-    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
-    Plot.dot(list(zip(xs, ys_observed))),
-])
+Plot.new(
+    [
+        Plot.line(list(zip(xs_plot, curve(xs_plot))), stroke=i)
+        for i, curve in enumerate(curves_optimized)
+    ]
+    + [
+        Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
+        Plot.dot(list(zip(xs, ys_observed))),
+    ]
+)
 
 # %% [markdown]
 # What kind of solutions to the fitting problem should we even be looking for, that reflect the diversity of acceptable answers?
@@ -347,11 +386,13 @@ jnp.array([curve.params for curve in curves_optimized])
 # By the way, the "optimized" curves do not even necessarily improve the overall fit over the original curve.
 
 # %%
-jnp.array([
-    joint_model.log_density(c.params, sigma_in, xs, ys_observed)
+jnp.array(
+    [
+        joint_model.log_density(c.params, sigma_in, xs, ys_observed)
         - joint_model.log_density(sample_curve.params[0], sigma_in, xs, ys_observed)
-    for c in curves_optimized
-])
+        for c in curves_optimized
+    ]
+)
 
 
 # %% [markdown]
@@ -458,18 +499,22 @@ def plot_functions(fns: b.BlockFunction, winningIndex=None, **kwargs):
 
     return Plot.new(
         [
-            Plot.line({"x": xs, "y": ys},
-                      curve="cardinal-open",
-                      stroke="black" if winner(i) else i%12,
-                      strokeWidth=4 if winner(i) else 1)
+            Plot.line(
+                {"x": xs, "y": ys},
+                curve="cardinal-open",
+                stroke="black" if winner(i) else i % 12,
+                strokeWidth=4 if winner(i) else 1,
+            )
             for i, ys in enumerate(yss.T)
         ],
         Plot.domain([-1, 1]),
         {"clip": True, "height": 400, "width": 400},
     )
 
+
 def plot_priors(B: b.Block, n: int, **kwargs):
     return plot_functions(B.sample(n).get_retval(), **kwargs)
+
 
 # yss = f_i(x_j) (??)
 # want: 100 rows of 200 pairs of (x,y) ?
@@ -536,6 +581,7 @@ p_outlier = genjax.beta(1.0, 1.0)
 sigma_inlier = genjax.uniform(0.0, 0.3)
 curve_fit = b.CurveFit(curve=quadratic, sigma_inlier=sigma_inlier, p_outlier=p_outlier)
 
+
 # %% [markdown]
 # We'll need a function to render the sample from the posterior. We can extract the
 # return value of the trace named curve to get the vector of functions; this has the
@@ -543,14 +589,18 @@ curve_fit = b.CurveFit(curve=quadratic, sigma_inlier=sigma_inlier, p_outlier=p_o
 # %%
 def plot_posterior(tr: genjax.Trace, xs: FloatArray, ys: FloatArray, **kwargs):
     ch = tr.get_choices()
-    outliers = ch['ys', ..., 'outlier']
+    outliers = ch["ys", ..., "outlier"]
     outlier_fraction = jnp.sum(outliers, axis=0) / outliers.shape[0]
     data = list(zip(xs, ys, outlier_fraction))
     plot = (
         plot_functions(tr.get_subtrace(("curve",)).get_retval(), opacity=0.2, **kwargs)  # type: ignore
-        + Plot.new(Plot.dot(data, fill=Plot.js('(d) => d3.interpolateViridis(d[2])'), r=4))
+        + Plot.new(
+            Plot.dot(data, fill=Plot.js("(d) => d3.interpolateViridis(d[2])"), r=4)
+        )
     )
     return plot
+
+
 # %% [markdown]
 # All that remains is to generate the sample. We select $K$ samples each drawn from a posterior
 # categorical distribution taken over $N$ samples. On my home Mac, whose GPU is not
@@ -565,6 +615,7 @@ plot_posterior(tr, xs, ys)
 # %% [markdown]
 # This is an excellent result, thanks to GenJAX, and I think indicative of what can be done with a DSL to temporarily shift the focus away from the nature of JAX. In this version of the model, the inlier sigma and probability were inference parameters of the model. Let's examine the distributions found by this inference:
 # Maybe we can stretch to accommodate a periodic sample:
+
 
 # %%
 def periodic_ex(F: b.Block, key=jax.random.PRNGKey(3)):
@@ -630,6 +681,7 @@ ascending_periodic_prior = quadratic + periodic
 periodic_data = ascending_periodic_ex(ascending_periodic_prior)
 plot_posterior(periodic_data["tr"], periodic_data["xs"], periodic_data["ys"])
 
+
 # %% [markdown]
 # The posterior distribution here is very thin, suggesting that the priors are too broad (note that I had to increase to 1M samples to get this far, which took 12.6s on my machine). Nonetheless, importance sampling on the sum function was able to find very plausible candidates.
 #
@@ -655,7 +707,9 @@ def gaussian_drift(
             updated_tr, log_weight, arg_diff, bwd_problem = tr.update(k1, cm)
             log_reject = jnp.minimum(0.0, log_weight)
             mh_choice = jax.random.uniform(key=k2)
-            return jax.lax.cond(jnp.log(mh_choice) <= log_reject, lambda: updated_tr, lambda: tr)
+            return jax.lax.cond(
+                jnp.log(mh_choice) <= log_reject, lambda: updated_tr, lambda: tr
+            )
 
         def update_coefficients(key: PRNGKey, coefficient_path: tuple):
             k1, k2 = jax.random.split(key)
@@ -719,33 +773,40 @@ def gaussian_drift(
     K = tr.get_score().shape[0]  # pyright: ignore [reportAttributeAccessIssue]
     # This is a two-dimensional JAX operation: we scan through `n` steps of `K` traces
     sub_keys = jax.random.split(key, (steps, K))
+
     def t(x):
         return x, x
+
     final_trace, gaussian_steps = jax.lax.scan(
         lambda trace, keys: t(jax.vmap(gaussian_drift_step)(keys, trace)),
         tr0,
         sub_keys,
     )
     return final_trace, gaussian_steps
+
+
 # %% [markdown]
 # In this cell, we will take the original curve fit size-100 importance sample of
 # the degree-2 polynomial prior and run it through 100 steps of Gaussian drift.
 # %%
 key, sub_key = jax.random.split(jax.random.PRNGKey(314159))
-tru, steps = gaussian_drift(sub_key, curve_fit, tr, steps=100, scale=.1)
+tru, steps = gaussian_drift(sub_key, curve_fit, tr, steps=100, scale=0.1)
 plot_posterior(tru, xs, ys)
 # %% [markdown]
 # The Gaussian_drift function returns two values: the final result of the drift, which we plotted above, and the results of each individual Gaussian drift step. We can use the latter value to create an animation, showing Gaussian drift in action.
 
 # %%
 
+
 def drift_animation(step_trace: genjax.Trace, xs, ys, fps=8):
     max_index = jnp.argmax(step_trace.get_score(), axis=1)
-    frames = [plot_posterior(genjax.pytree.nth(step_trace, i), xs, ys,
-                             winningIndex=max_index[i])
-              for i in range(step_trace.get_score().shape[0])]
+    frames = [
+        plot_posterior(
+            genjax.pytree.nth(step_trace, i), xs, ys, winningIndex=max_index[i]
+        )
+        for i in range(step_trace.get_score().shape[0])
+    ]
     return Plot.Frames(frames, fps=fps)
-
 
 
 # %%
@@ -761,7 +822,7 @@ jnp.argmax(steps.get_score(), axis=0)
 
 # %%
 key, sub_key = jax.random.split(key)
-periodic_t1, periodic_t1_steps  = gaussian_drift(
+periodic_t1, periodic_t1_steps = gaussian_drift(
     sub_key, periodic_data["curve_fit"], periodic_data["tr"], steps=100
 )
 drift_animation(periodic_t1_steps, periodic_data["xs"], periodic_data["ys"])
@@ -779,34 +840,38 @@ pz.ts.render_array(periodic_t2_steps.get_score())
 # %%
 key, sub_key = jax.random.split(key)
 
+
 def demo(
     *,
-    xs: FloatArray,                                  # x coordinates of points to fit
-    ys: FloatArray,                                  # y coordinates of points to fit
-    noise_scale: float,                              # SD of noise added to ys
-    gaussian_drift_scale: float,                     # scale of Gaussian drift proposals
-    gaussian_drift_steps: int,                       # number of drift steps to take
+    xs: FloatArray,  # x coordinates of points to fit
+    ys: FloatArray,  # y coordinates of points to fit
+    noise_scale: float,  # SD of noise added to ys
+    gaussian_drift_scale: float,  # scale of Gaussian drift proposals
+    gaussian_drift_steps: int,  # number of drift steps to take
     sigma_inlier: genjax.GenerativeFunctionClosure,  # distribution of inlier sigma
-    p_outlier: genjax.GenerativeFunctionClosure,     # distribution of p_outlier
-    prior: b.Block,                                  # function shape
-    K: int,                                          # number of particles
-    N: int,                                          # size of importance sample per particle
-    fps: int,                                        # fps hint for generated animation
-    key: PRNGKey):                                   # seed
+    p_outlier: genjax.GenerativeFunctionClosure,  # distribution of p_outlier
+    prior: b.Block,  # function shape
+    K: int,  # number of particles
+    N: int,  # size of importance sample per particle
+    fps: int,  # fps hint for generated animation
+    key: PRNGKey,
+):  # seed
     k1, k2, k3 = jax.random.split(key, 3)
     ys += jax.random.normal(k1, shape=ys.shape) * noise_scale
     curve_fit = b.CurveFit(curve=prior, sigma_inlier=sigma_inlier, p_outlier=p_outlier)
     tr = curve_fit.importance_sample(xs, ys, N, K, key=k2)
-    _best, steps = gaussian_drift(k3, curve_fit, tr, gaussian_drift_scale, gaussian_drift_steps)
+    _best, steps = gaussian_drift(
+        k3, curve_fit, tr, gaussian_drift_scale, gaussian_drift_steps
+    )
     return drift_animation(steps, xs, ys, fps=fps)
 
 
-xs=jnp.linspace(-0.9, 0.9, 20)
+xs = jnp.linspace(-0.9, 0.9, 20)
 
 demo(
     key=sub_key,
     xs=xs,
-    ys=xs ** 2.0 - 0.5,
+    ys=xs**2.0 - 0.5,
     noise_scale=0.1,
     gaussian_drift_scale=0.05,
     gaussian_drift_steps=24,

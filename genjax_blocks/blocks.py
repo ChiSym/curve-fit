@@ -19,9 +19,9 @@ class Block:
     from the underlying distribution."""
 
     params_distribution: GenerativeFunction
-    function_family: Callable # type: ignore
+    function_family: Callable  # type: ignore
     gf: GenerativeFunction
-    jitted_sample: Callable # type: ignore
+    jitted_sample: Callable  # type: ignore
     address_segments: List[Tuple]
 
     def __init__(self, params_distribution, function_family, address_segments):
@@ -33,13 +33,12 @@ class Block:
         def gf():
             params = params_distribution() @ "curve_params"
             return BlockFunction(params, function_family)
+
         self.gf = gf
         self.jitted_sample = jax.jit(gf.simulate)
 
     def sample(self, n: int = 1, k: PRNGKey = jax.random.PRNGKey(0)):
-        return jax.vmap(
-            self.jitted_sample, in_axes=(0, None)
-        )(
+        return jax.vmap(self.jitted_sample, in_axes=(0, None))(
             jax.random.split(k, n), ()
         )
 
@@ -64,7 +63,7 @@ class BlockFunction(Pytree):
     """A BlockFunction is a Pytree which is also Callable."""
 
     params: FloatArray | Tuple
-    function_family: Callable = Pytree.static() # type: ignore
+    function_family: Callable = Pytree.static()  # type: ignore
 
     def __call__(self, x: ArrayLike) -> FloatArray:
         return self.function_family(self.params, x)
@@ -83,7 +82,7 @@ class Polynomial(Block):
 
         @genjax.gen
         def params_distribution():
-            return coef.repeat(n=max_degree+1)() @ "p"
+            return coef.repeat(n=max_degree + 1)() @ "p"
 
         def function_family(params, x):
             deg = params.shape[-1]
@@ -167,19 +166,20 @@ class Pointwise(Block):
             params_l, params_r = params
             return op(l.function_family(params_l, x), r.function_family(params_r, x))
 
-        address_segments = (
-            [("l",) + s for s in self.l.address_segments]
-            + [("r",) + s for s in self.l.address_segments]
-        )
+        address_segments = [("l",) + s for s in self.l.address_segments] + [
+            ("r",) + s for s in self.l.address_segments
+        ]
 
         super().__init__(params_distribution, function_family, address_segments)
 
     def constraint_from_params(self, params):
         params_l, params_r = params
-        return C.d({
-            "l": self.l.constraint_from_params(params_l),
-            "r": self.r.constraint_from_params(params_r)
-        })
+        return C.d(
+            {
+                "l": self.l.constraint_from_params(params_l),
+                "r": self.r.constraint_from_params(params_r),
+            }
+        )
 
 
 class Compose(Block):
@@ -198,19 +198,20 @@ class Compose(Block):
             params_l, params_r = params
             return l.function_family(params_l, r.function_family(params_r, x))
 
-        address_segments = (
-            [("l",) + s for s in self.l.address_segments]
-            + [("r",) + s for s in self.l.address_segments]
-        )
+        address_segments = [("l",) + s for s in self.l.address_segments] + [
+            ("r",) + s for s in self.l.address_segments
+        ]
 
         super().__init__(params_distribution, function_family, address_segments)
 
     def constraint_from_params(self, params):
         params_l, params_r = params
-        return C.d({
-            "l": self.l.constraint_from_params(params_l),
-            "r": self.r.constraint_from_params(params_r)
-        })
+        return C.d(
+            {
+                "l": self.l.constraint_from_params(params_l),
+                "r": self.r.constraint_from_params(params_r),
+            }
+        )
 
 
 class CurveFit:
@@ -220,9 +221,9 @@ class CurveFit:
 
     gf: GenerativeFunction
     curve: Block
-    jitted_importance: Callable # type: ignore
+    jitted_importance: Callable  # type: ignore
     coefficient_paths: List[Tuple]
-    categorical_sampler: Callable # type: ignore
+    categorical_sampler: Callable  # type: ignore
 
     def __init__(
         self,
@@ -262,7 +263,9 @@ class CurveFit:
         self.gf = model
         self.curve = curve
         self.jitted_importance = jax.jit(self.gf.importance)
-        self.coefficient_paths = [("curve", "curve_params") + p for p in self.curve.address_segments]
+        self.coefficient_paths = [
+            ("curve", "curve_params") + p for p in self.curve.address_segments
+        ]
         self.categorical_sampler = jax.jit(genjax.categorical.sampler)
 
     def importance_sample(
@@ -304,10 +307,12 @@ def plot_functions(fns: BlockFunction, winningIndex=None, **kwargs):
 
     return Plot.new(
         [
-            Plot.line({"x": xs, "y": ys},
-                      curve="cardinal-open",
-                      stroke="black" if winner(i) else i%12,
-                      strokeWidth=4 if winner(i) else 1)
+            Plot.line(
+                {"x": xs, "y": ys},
+                curve="cardinal-open",
+                stroke="black" if winner(i) else i % 12,
+                strokeWidth=4 if winner(i) else 1,
+            )
             for i, ys in enumerate(yss.T)
         ],
         Plot.domain([-1, 1]),
@@ -319,7 +324,7 @@ class DataModel:
     params_distribution: GenerativeFunction
     kernel: GenerativeFunction
     gf: GenerativeFunction
-    jitted_sample: Callable # type: ignore
+    jitted_sample: Callable  # type: ignore
 
     def __init__(self, params_distribution, kernel):
         self.params_distribution = params_distribution
@@ -329,13 +334,14 @@ class DataModel:
         def gf(ys_latent: ArrayLike) -> FloatArray:
             params = params_distribution() @ "kernel_params"
             return kernel.vmap(in_axes=(0, None))(ys_latent, params) @ "kernel"
+
         self.gf = gf
         self.jitted_sample = jax.jit(gf.simulate)
 
-    def sample(self, ys_latent: ArrayLike, n: int = 1, k: PRNGKey = jax.random.PRNGKey(0)):
-        return jax.vmap(
-            self.jitted_sample, in_axes=(0, None)
-        )(
+    def sample(
+        self, ys_latent: ArrayLike, n: int = 1, k: PRNGKey = jax.random.PRNGKey(0)
+    ):
+        return jax.vmap(self.jitted_sample, in_axes=(0, None))(
             jax.random.split(k, n), (ys_latent,)
         )
 
@@ -353,10 +359,7 @@ class NoisyData(DataModel):
             return sigma_inlier @ "σ_inlier"
 
         @genjax.gen
-        def kernel(
-            y_latent: ArrayLike,
-            params: ArrayLike
-        ) -> FloatArray:
+        def kernel(y_latent: ArrayLike, params: ArrayLike) -> FloatArray:
             sigma_in = params
             return genjax.normal(y_latent, sigma_in) @ "y"
 
@@ -372,7 +375,12 @@ class NoisyData(DataModel):
 
 
 class NoisyOutliersData(DataModel):
-    def __init__(self, *, sigma_inlier: GenerativeFunctionClosure, p_outlier: GenerativeFunctionClosure):
+    def __init__(
+        self,
+        *,
+        sigma_inlier: GenerativeFunctionClosure,
+        p_outlier: GenerativeFunctionClosure,
+    ):
         @genjax.gen
         def params_distribution():
             sigma_in = sigma_inlier @ "σ_inlier"
@@ -380,10 +388,7 @@ class NoisyOutliersData(DataModel):
             return (sigma_in, p_out)
 
         @genjax.gen
-        def kernel(
-            y_latent: ArrayLike,
-            params: Tuple
-        ) -> FloatArray:
+        def kernel(y_latent: ArrayLike, params: Tuple) -> FloatArray:
             sigma_in, p_out = params
 
             inlier_model = genjax.normal(y_latent, sigma_in)
@@ -406,12 +411,13 @@ class NoisyOutliersData(DataModel):
 
 categorical_sampler = jax.jit(genjax.categorical.sampler)
 
+
 class CurveDataModel:
     curve: Block
     data_model: DataModel
     gf: GenerativeFunction
-    jitted_sample: Callable # type: ignore
-    jitted_importance: Callable # type: ignore
+    jitted_sample: Callable  # type: ignore
+    jitted_importance: Callable  # type: ignore
     coefficient_paths: List[Tuple]
 
     def __init__(self, curve, data_model):
@@ -422,21 +428,26 @@ class CurveDataModel:
         def gf(xs):
             c = curve.gf() @ "curve"
             return data_model.gf(c(xs)) @ "data"
+
         self.gf = gf
         self.jitted_sample = jax.jit(gf.simulate)
         self.jitted_importance = jax.jit(gf.importance)
 
-        self.coefficient_paths = [("curve", "curve_params") + p for p in curve.address_segments]
+        self.coefficient_paths = [
+            ("curve", "curve_params") + p for p in curve.address_segments
+        ]
 
     def sample(self, n: int = 1, k: PRNGKey = jax.random.PRNGKey(0)):
-        return jax.vmap(
-            self.jitted_sample, in_axes=(0, None)
-        )(
+        return jax.vmap(self.jitted_sample, in_axes=(0, None))(
             jax.random.split(k, n), ()
         )
 
-    def gradient_ascent_model_params(self, params_guess, kernel_params, xs, ys, N_steps=1000, learning_rate=1e-5):
-        jitted_grad = jax.jit(jax.jacfwd(lambda params: self.log_density(params, kernel_params, xs, ys)))
+    def gradient_ascent_model_params(
+        self, params_guess, kernel_params, xs, ys, N_steps=1000, learning_rate=1e-5
+    ):
+        jitted_grad = jax.jit(
+            jax.jacfwd(lambda params: self.log_density(params, kernel_params, xs, ys))
+        )
 
         params_optimized = params_guess
         for _ in range(N_steps):
@@ -445,13 +456,23 @@ class CurveDataModel:
         return self.curve.curve_from_params(params_optimized)
 
     def log_density(self, curve_params, kernel_params, xs, samples):
-        constraint = C.d({
-            "curve": C.d({"curve_params": self.curve.constraint_from_params(curve_params)}),
-            "data": C.d({
-                "kernel_params": self.data_model.constraint_from_params(kernel_params),
-                "kernel": C[jnp.arange(len(xs))].set(self.data_model.constraint_from_samples(samples))
-            })
-        })
+        constraint = C.d(
+            {
+                "curve": C.d(
+                    {"curve_params": self.curve.constraint_from_params(curve_params)}
+                ),
+                "data": C.d(
+                    {
+                        "kernel_params": self.data_model.constraint_from_params(
+                            kernel_params
+                        ),
+                        "kernel": C[jnp.arange(len(xs))].set(
+                            self.data_model.constraint_from_samples(samples)
+                        ),
+                    }
+                ),
+            }
+        )
         return self.gf.assess(constraint, (xs,))[0]
 
     def importance_resample(
@@ -470,15 +491,11 @@ class CurveDataModel:
         constraint = C["data", "kernel", jnp.arange(len(ys)), "y"].set(ys)
         samples, log_weights = jax.vmap(
             self.jitted_importance, in_axes=(0, None, None)
-        )(
-            jax.random.split(key1, N * K), constraint, (xs,)
-        )
+        )(jax.random.split(key1, N * K), constraint, (xs,))
 
         # reshape the samples in to K batches of size N
         log_weights = log_weights.reshape((K, N))
-        winners = jax.vmap(categorical_sampler)(
-            jax.random.split(key2, K), log_weights
-        )
+        winners = jax.vmap(categorical_sampler)(jax.random.split(key2, K), log_weights)
         # indices returned are relative to the start of the batch from which they were drawn.
         # globalize the indices by adding back the index of the start of each batch.
         winners += jnp.arange(0, N * K, N)
