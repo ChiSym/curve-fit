@@ -271,7 +271,7 @@ class CurveFit:
         self.gf = model
         self.curve = curve
         self.jitted_importance = jax.jit(self.gf.importance)
-        self.coefficient_paths = [("curve", "params") + p for p in self.curve.address_segments()]
+        self.coefficient_paths = [("curve", "curve_params") + p for p in self.curve.address_segments()]
         self.categorical_sampler = jax.jit(genjax.categorical.sampler)
 
     def importance_sample(
