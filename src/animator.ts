@@ -32,6 +32,7 @@ export class Animator {
   private points: number[][] = []
   private pause: boolean = false
   private autoSIR: boolean = false
+  private visualizeInlierSigma: boolean = false
   private componentEnable: Map<string, boolean> = new Map()
   private frameCount = 0
   private totalFailedSamples = 0
@@ -58,6 +59,7 @@ export class Animator {
     this.inferenceParameters.importanceSamplesPerParticle =
       ps.importanceSamplesPerParticle
     this.inferenceParameters.numParticles = ps.numParticles
+    this.Reset()
   }
 
   public setModelParameters(params: Map<string, XDistribution>) {
@@ -75,6 +77,10 @@ export class Animator {
 
   public setAutoSIR(autoSIR: boolean) {
     this.autoSIR = autoSIR
+  }
+
+  public setVisualizeInlierSigma(vis: boolean) {
+    this.visualizeInlierSigma = vis
   }
 
   public setComponentEnable(componentEnable: Map<string, boolean>) {
@@ -135,7 +141,13 @@ export class Animator {
           }
           ++this.frameCount
           const fps = Math.trunc(this.frameCount / ((t - this.t0) / 1e3))
-          renderer.render(this.points, result)
+          renderer.render(
+            {
+              points: this.points,
+              visualizeInlierSigma: this.visualizeInlierSigma,
+            },
+            result,
+          )
           const info = {
             totalFailedSamples: this.totalFailedSamples,
             ips: result.ips,

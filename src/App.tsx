@@ -298,6 +298,17 @@ export default function CurveFit() {
           />
           Auto-SIR
         </label>
+        &nbsp;&nbsp;
+        <label>
+          <input
+            id="visualizeInlierSigma"
+            type="checkbox"
+            onChange={(e) =>
+              animatorRef.current.setVisualizeInlierSigma(e.target.checked)
+            }
+          />
+          viz inlier sigma
+        </label>
       </div>
       <div className="card">
         <button id="sir" type="button" onClick={SIR_Update}>

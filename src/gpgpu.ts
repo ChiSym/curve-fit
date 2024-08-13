@@ -1,5 +1,4 @@
 import { XDistribution } from "./App"
-import { type Model } from "./model"
 import { importanceShader } from "./shaders"
 import { WGL2Helper } from "./webgl"
 
@@ -7,7 +6,16 @@ export interface ResultBatch {
   model: Float32Array
   weight: Float32Array
   p_outlier: Float32Array
+  inlier_sigma: Float32Array
   outlier: Uint32Array
+}
+
+interface Model {
+  model: Float32Array
+  outlier: number
+  log_weight: number
+  p_outlier: number
+  inlier_sigma: number
 }
 
 export interface ModelParameters {
@@ -242,6 +250,7 @@ export class GPGPU_Inference {
       model: this.parameters.subarray(0, N * this.floatsPerSeed),
       p_outlier: this.p_outlier.subarray(0, N),
       outlier: this.outlier.subarray(0, N),
+      inlier_sigma: this.inlierSigma.subarray(0, N),
       weight: this.weight.subarray(0, N),
     }
   }
@@ -289,6 +298,7 @@ export class GPGPU_Inference {
           ),
           outlier: results.outlier[targetIndex],
           p_outlier: results.p_outlier[targetIndex],
+          inlier_sigma: results.inlier_sigma[targetIndex],
           log_weight: results.weight[targetIndex],
         }
       } else {

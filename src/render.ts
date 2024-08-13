@@ -1,13 +1,24 @@
 import { WGL2Helper } from "./webgl.ts"
 import { InferenceResult } from "./gpgpu.ts"
 
+export interface RenderingConfiguration {
+  points: number[][]
+  visualizeInlierSigma: boolean
+}
+
 export class Render {
+  private readonly uniform: Map<string, WebGLUniformLocation>
+  private readonly uniformNames = [
+    "points",
+    "canvas_size",
+    "flags",
+    "n_models",
+    "coefficients",
+    "outliers",
+    "inlier_sigma",
+  ]
+
   private readonly positionLoc: number
-  private readonly pointsLoc: WebGLUniformLocation
-  private readonly canvasSizeLoc: WebGLUniformLocation
-  private readonly nModelsLoc: WebGLUniformLocation
-  private readonly coefficientsLoc: WebGLUniformLocation
-  private readonly outliersLoc: WebGLUniformLocation
   private readonly gl: WebGL2RenderingContext
   private readonly program: WebGLProgram
   canvas: HTMLCanvasElement
@@ -27,14 +38,13 @@ export class Render {
       gl_Position = a_position;
     }`
 
-    console.log("render constructor", modelSize)
     const program = wgl.createProgram(vs, renderShader(modelSize))
+    this.uniform = new Map()
+    for (const name of this.uniformNames) {
+      this.uniform.set(name, wgl.getUniformLocation(program, name))
+    }
+
     this.positionLoc = gl.getAttribLocation(program, "a_position")
-    this.pointsLoc = wgl.getUniformLocation(program, "points")
-    this.canvasSizeLoc = wgl.getUniformLocation(program, "canvas_size")
-    this.nModelsLoc = wgl.getUniformLocation(program, "n_models")
-    this.coefficientsLoc = wgl.getUniformLocation(program, "coefficients")
-    this.outliersLoc = wgl.getUniformLocation(program, "outliers")
 
     // Set up full canvas clip space quad (this is two triangles that
     // together cover the space [-1,1] x [-1,1], the point being that
@@ -64,21 +74,33 @@ export class Render {
     this.program = program
   }
 
-  render(points: number[][], result: InferenceResult): void {
+  render(rc: RenderingConfiguration, result: InferenceResult): void {
     const gl = this.gl
     const models = result.selectedModels
+
+    const u = (name: string) => {
+      const r = this.uniform.get(name)
+      if (!r) throw `unable to find uniform ${name}`
+      return r
+    }
+
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height)
     gl.useProgram(this.program)
-    gl.uniform2f(this.canvasSizeLoc, gl.canvas.width, gl.canvas.height)
-    gl.uniform2fv(this.pointsLoc, points.flat(), 0, 2 * points.length)
-    gl.uniform1ui(this.nModelsLoc, result.selectedModels.length)
+    gl.uniform2f(u("canvas_size"), gl.canvas.width, gl.canvas.height)
+    gl.uniform2fv(u("points"), rc.points.flat(), 0, 2 * rc.points.length)
+    gl.uniform1ui(u("n_models"), result.selectedModels.length)
+    gl.uniform1ui(u("flags"), rc.visualizeInlierSigma ? 1 : 0)
     gl.uniform1fv(
-      this.coefficientsLoc,
+      u("coefficients"),
       models.map((m) => Array.from(m.model)).flat(),
     )
     gl.uniform1uiv(
-      this.outliersLoc,
+      u("outliers"),
       models.map((m) => m.outlier),
+    )
+    gl.uniform1fv(
+      u("inlier_sigma"),
+      models.map((m) => m.inlier_sigma),
     )
     gl.clearColor(0.5, 0.5, 0.5, 1.0)
     gl.clear(gl.COLOR_BUFFER_BIT)
@@ -96,8 +118,10 @@ function renderShader(modelSize: number): string {
 
   uniform vec2 canvas_size;
   uniform uint n_models;
+  uniform uint flags;
   uniform vec2 points[N_POINTS];
   uniform float coefficients[MAX_N_MODELS * MODEL_SIZE];
+  uniform float inlier_sigma[MAX_N_MODELS];
   uniform uint outliers[MAX_N_MODELS];
 
   out vec4 out_color;
@@ -106,6 +130,7 @@ function renderShader(modelSize: number): string {
   void main() {
     // Map pixel coordinates [0,w) x [0,h) to the unit square [-1, 1) x [-1, 1)
     vec2 xy = gl_FragCoord.xy / canvas_size.xy * 2.0 + vec2(-1.0,-1.0);
+    bool visualizeInlierSigma = (flags & 1u) != 0u;
 
     // background
     out_color = vec4(0.85,0.85,0.85,1.0);
@@ -122,6 +147,7 @@ function renderShader(modelSize: number): string {
 
     // curves: blended
     uint curve_count = 0u;
+    uint nearby_count = 0u;
     for (uint i = 0u, ci = 0u; i < n_models; ++i, ci+=MODEL_SIZE) {
       float a0 = coefficients[ci];
       float a1 = coefficients[ci+1u];
@@ -141,10 +167,12 @@ function renderShader(modelSize: number): string {
 
       float Fxy = xy.y - p.y;
       vec2 GFxy = vec2(dFdx(Fxy), dFdy(Fxy));
-      float sd = Fxy / length(GFxy);
-      if (abs(sd) < 1.0) ++curve_count;
+      float sd = abs(Fxy / length(GFxy));
+      if (sd < 1.0) {
+        ++curve_count;
+      }
     }
-    if (curve_count > 0u) out_color = mix(out_color, vec4(0.0,0.0,0.0,1.0), 1.0-pow(0.70,float(curve_count)));
+    if (curve_count > 0u) out_color = mix(out_color, vec4(0.0,0.0,0.0,1.0), 1.0-pow(0.70, float(curve_count)));
 
     for (int i = 0; i < N_POINTS; ++i) {
       float d = distance(points[i], xy);
@@ -153,13 +181,15 @@ function renderShader(modelSize: number): string {
         if (d < 0.025) {
           // find out how many times this one is considered an outlier
           int outlier_count = 0;
-          for (uint j = 0u; j < n_models; ++j) {
-            if ((outliers[j] & (1u << i)) != 0u) {
+          for (uint k = 0u; k < n_models; ++k) {
+            if ((outliers[k] & (1u << i)) != 0u) {
               ++outlier_count;
             }
           }
           float outlier_frac = float(outlier_count) / float(n_models);
           out_color = outlier_frac * vec4(1.0,0.0,0.0,1.0) + (1.0-outlier_frac) * vec4(0.0,0.6,1.0,1.0);
+        } else if (visualizeInlierSigma && abs(d - inlier_sigma[j] * 1.0) < 0.01) {
+          out_color = mix(out_color, vec4(0.0,1.0,0.0,1.0), 0.2);
         }
       }
     }
