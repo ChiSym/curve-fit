@@ -2,7 +2,7 @@ import { XDistribution } from "./App.tsx"
 import { GPGPU_Inference, InferenceParameters } from "./gpgpu.ts"
 import { Render } from "./render.ts"
 import { RunningStats } from "./stats.ts"
-import { TypedObject } from './utils';
+import { TypedObject } from "./utils"
 
 function log(level: string, message: unknown): void {
   if (level === "error") {
@@ -52,11 +52,11 @@ export class Animator {
     this.inferenceReportCallback = inferenceReportCallback
     // make copies of the initial values
     this.modelParameters = { ...modelParameters }
-    this.inferenceParameters = { ...inferenceParameters };
+    this.inferenceParameters = { ...inferenceParameters }
     this.stats = Object.keys(modelParameters).reduce((acc, k) => {
-      acc[k] = new RunningStats();
-      return acc;
-    }, {} as TypedObject<RunningStats>);
+      acc[k] = new RunningStats()
+      return acc
+    }, {} as TypedObject<RunningStats>)
   }
 
   public setInferenceParameters(ps: InferenceParameters) {
@@ -72,7 +72,7 @@ export class Animator {
   }
 
   public setPoints(points: number[][]) {
-    this.points = points.map(v => [...v]) // make copy
+    this.points = points.map((v) => [...v]) // make copy
   }
 
   public setPause(pause: boolean) {
@@ -93,7 +93,7 @@ export class Animator {
 
   public getPosterior(): TypedObject<XDistribution> {
     return Object.fromEntries(
-      Object.entries(this.stats).map(([k, v]) => [k, v.summarize()])
+      Object.entries(this.stats).map(([k, v]) => [k, v.summarize()]),
     )
   }
 
@@ -113,7 +113,10 @@ export class Animator {
       Object.keys(this.modelParameters).length,
       maxSamplesPerParticle,
     )
-    const renderer = new Render(this.canvas, Object.keys(this.modelParameters).length)
+    const renderer = new Render(
+      this.canvas,
+      Object.keys(this.modelParameters).length,
+    )
 
     let stopAnimation = false
     this.t0 = performance.now() // TODO: need to reset this from time to time along with frame count
@@ -143,7 +146,7 @@ export class Animator {
             }
             pOutlierStats.observe(m.p_outlier)
           }
-          ++this.frameCount 
+          ++this.frameCount
           const fps = Math.trunc(this.frameCount / ((t - this.t0) / 1e3))
           renderer.render(
             {

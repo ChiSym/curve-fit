@@ -5,7 +5,7 @@ import throttle from "lodash.throttle"
 import katex from "katex"
 import { InferenceParameters } from "./gpgpu.ts"
 import { RunningStats } from "./stats.ts"
-import { TypedObject } from './utils';
+import { TypedObject } from "./utils"
 
 class DistributionShape {
   public readonly name: string
@@ -64,7 +64,7 @@ export const modelParams: TypedObject<XDistribution> = {
   A: Normal(0, 2),
   phi: Normal(0, 2),
   inlier: Normal(0.3, 0.07),
-};
+}
 
 const defaultInferenceParameters: InferenceParameters = {
   importanceSamplesPerParticle: 1000,
@@ -85,23 +85,24 @@ export default function CurveFit() {
     return { points: points, evictionIndex: 0 }
   })
 
-  
   const [emptyPosterior, setEmptyPosterior] = useState(0)
-  const [modelState, setModelState] = useState<TypedObject<XDistribution>>(modelParams);
-  const [posteriorState, setPosteriorState] = useState<TypedObject<XDistribution>>(modelParams);
+  const [modelState, setModelState] =
+    useState<TypedObject<XDistribution>>(modelParams)
+  const [posteriorState, setPosteriorState] =
+    useState<TypedObject<XDistribution>>(modelParams)
 
   const [componentEnable, setComponentEnable] = useState<TypedObject<boolean>>({
     polynomial: true,
     periodic: true,
-  });
+  })
 
   const [ips, setIps] = useState(0.0)
   const [fps, setFps] = useState(0.0)
 
   function modelChange(k1: string, k2: string, v: number) {
-    console.log(`${k1}_${k2} -> ${v}`);
-    setModelState({...modelState, [k1]: modelState[k1]!.assoc(k2, v)})
-    animatorRef.current?.setModelParameters(modelState);
+    console.log(`${k1}_${k2} -> ${v}`)
+    setModelState({ ...modelState, [k1]: modelState[k1]!.assoc(k2, v) })
+    animatorRef.current?.setModelParameters(modelState)
   }
 
   const [outlier, setOutlier] = useState(Normal(0, 0))
@@ -140,12 +141,12 @@ export default function CurveFit() {
 
   const canvasRef = useCallback((canvas: HTMLCanvasElement | null) => {
     if (canvas) {
-      const a = animatorRef.current = new Animator(
-        canvas, 
-        modelParams, 
-        defaultInferenceParameters, 
-        setter
-      )
+      const a = (animatorRef.current = new Animator(
+        canvas,
+        modelParams,
+        defaultInferenceParameters,
+        setter,
+      ))
       a.setInferenceParameters(inferenceParameters)
       a.setModelParameters(modelParams)
       a.setPoints(points.points)
@@ -154,7 +155,6 @@ export default function CurveFit() {
     }
   }, [])
 
-  
   const componentsRef = useCallback((element: HTMLElement | null) => {
     if (element) {
       // Render all the spans tagged with TeX source with KaTeX

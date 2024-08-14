@@ -1,7 +1,7 @@
 import { XDistribution } from "./App"
 import { importanceShader } from "./shaders"
 import { WGL2Helper } from "./webgl"
-import { TypedObject } from './utils';
+import { TypedObject } from "./utils"
 
 export interface ResultBatch {
   model: Float32Array
@@ -169,11 +169,15 @@ export class GPGPU_Inference {
 
     gl.uniform1fv(
       this.alphaLocLoc,
-      Array.from(Object.values(parameters.coefficients)).map((v) => v.get("mu")),
+      Array.from(Object.values(parameters.coefficients)).map((v) =>
+        v.get("mu"),
+      ),
     )
     gl.uniform1fv(
       this.alphaScaleLoc,
-      Array.from(Object.values(parameters.coefficients)).map((c) => c.get("sigma")),
+      Array.from(Object.values(parameters.coefficients)).map((c) =>
+        c.get("sigma"),
+      ),
     )
 
     let enableBits = 0
