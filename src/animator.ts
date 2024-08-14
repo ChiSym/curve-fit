@@ -38,15 +38,17 @@ export class Animator {
   private frameCount = 0
   private totalFailedSamples = 0
   private t0: DOMHighResTimeStamp = performance.now()
-
+  private canvas: HTMLCanvasElement
   // TODO: define type ModelParameters as Map<string, Distribution>; change signature of inference
   // engine code to take multiple parameters, giving up old name
 
   constructor(
+    canvas: HTMLCanvasElement,
     modelParameters: TypedObject<XDistribution>,
     inferenceParameters: InferenceParameters,
     inferenceReportCallback: (r: InferenceReport) => void,
   ) {
+    this.canvas = canvas
     this.inferenceReportCallback = inferenceReportCallback
     // make copies of the initial values
     this.modelParameters = { ...modelParameters }
@@ -111,7 +113,7 @@ export class Animator {
       Object.keys(this.modelParameters).length,
       maxSamplesPerParticle,
     )
-    const renderer = new Render(Object.keys(this.modelParameters).length)
+    const renderer = new Render(this.canvas, Object.keys(this.modelParameters).length)
 
     let stopAnimation = false
     this.t0 = performance.now() // TODO: need to reset this from time to time along with frame count

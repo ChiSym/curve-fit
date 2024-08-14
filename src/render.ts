@@ -21,12 +21,10 @@ export class Render {
   private readonly positionLoc: number
   private readonly gl: WebGL2RenderingContext
   private readonly program: WebGLProgram
-  canvas: HTMLCanvasElement
+  private canvas: HTMLCanvasElement
 
-  constructor(modelSize: number) {
-    const c = document.querySelector<HTMLCanvasElement>("#c")
-    if (c == null) throw new Error("unable to find canvas element for render")
-    this.canvas = c
+  constructor(canvas: HTMLCanvasElement, modelSize: number) {
+    this.canvas = canvas
     this.canvas.width = 400
     this.canvas.height = 400
     const wgl = new WGL2Helper(this.canvas)

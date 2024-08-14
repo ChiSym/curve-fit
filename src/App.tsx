@@ -1,6 +1,6 @@
 import "./App.css"
 import { Animator, InferenceReport } from "./animator.ts"
-import { useState, useEffect, useRef, ChangeEvent } from "react"
+import { useCallback, useState, useRef, ChangeEvent } from "react"
 import throttle from "lodash.throttle"
 import katex from "katex"
 import { InferenceParameters } from "./gpgpu.ts"
@@ -72,9 +72,7 @@ const defaultInferenceParameters: InferenceParameters = {
 }
 
 export default function CurveFit() {
-  const animatorRef = useRef<Animator>(
-    new Animator(modelParams, defaultInferenceParameters, setter),
-  )
+  const animatorRef = useRef<Animator | null>(null)
 
   const [inferenceParameters, setInferenceParameters] = useState(
     defaultInferenceParameters,
@@ -103,7 +101,7 @@ export default function CurveFit() {
   function modelChange(k1: string, k2: string, v: number) {
     console.log(`${k1}_${k2} -> ${v}`);
     setModelState({...modelState, [k1]: modelState[k1]!.assoc(k2, v)})
-    animatorRef.current.setModelParameters(modelState);
+    animatorRef.current?.setModelParameters(modelState);
   }
 
   const [outlier, setOutlier] = useState(Normal(0, 0))
@@ -114,14 +112,16 @@ export default function CurveFit() {
   const throttledSetIps = throttle(setIps, 500)
   const throttledSetFps = throttle(setFps, 500)
   const throttledSetPosteriorState = throttle(() => {
-    setPosteriorState(animatorRef.current.getPosterior())
+    setPosteriorState(animatorRef.current?.getPosterior() || {})
   }, 500)
 
   function SIR_Update() {
-    const s = animatorRef.current.getPosterior()
-    setModelState(s)
-    setPosteriorState(s)
-    animatorRef.current.setModelParameters(s)
+    const s = animatorRef.current?.getPosterior()
+    if (s) {
+      setModelState(s)
+      setPosteriorState(s)
+      animatorRef.current?.setModelParameters(s)
+    }
   }
 
   function setter(data: InferenceReport) {
@@ -138,27 +138,38 @@ export default function CurveFit() {
     }
   }
 
-  useEffect(() => {
-    // Things to do once the UI is set up:
-    // - Render all the spans tagged with TeX source with KaTeX
-    Array.from(document.querySelectorAll("span.katex-render")).forEach((e) => {
-      const text = e.getAttribute("katex-source")!
-      katex.render(text, e as HTMLElement)
-    })
-    // - Start the animation loop
-    const a = animatorRef.current
-    a.setInferenceParameters(inferenceParameters)
-    a.setModelParameters(modelParams)
-    a.setPoints(points.points)
-    a.setComponentEnable(componentEnable)
-    return a.run()
+  const canvasRef = useCallback((canvas: HTMLCanvasElement | null) => {
+    if (canvas) {
+      const a = animatorRef.current = new Animator(
+        canvas, 
+        modelParams, 
+        defaultInferenceParameters, 
+        setter
+      )
+      a.setInferenceParameters(inferenceParameters)
+      a.setModelParameters(modelParams)
+      a.setPoints(points.points)
+      a.setComponentEnable(componentEnable)
+      return a.run()
+    }
+  }, [])
+
+  
+  const componentsRef = useCallback((element: HTMLElement | null) => {
+    if (element) {
+      // Render all the spans tagged with TeX source with KaTeX
+      Array.from(element.querySelectorAll("span.katex-render")).forEach((e) => {
+        const text = e.getAttribute("katex-source")!
+        katex.render(text, e as HTMLElement)
+      })
+    }
   }, [])
 
   function Reset() {
     setModelState(modelParams)
     setPosteriorState(modelParams)
-    animatorRef.current.setModelParameters(modelParams)
-    animatorRef.current.Reset()
+    animatorRef.current?.setModelParameters(modelParams)
+    animatorRef.current?.Reset()
   }
 
   function canvasClick(event: React.MouseEvent<HTMLCanvasElement>) {
@@ -175,13 +186,13 @@ export default function CurveFit() {
       i = 0
     }
     setPoints({ points: ps.slice(), evictionIndex: i })
-    animatorRef.current.setPoints(ps)
+    animatorRef.current?.setPoints(ps)
     Reset()
   }
 
   return (
     <>
-      <canvas id="c" onClick={canvasClick}></canvas>
+      <canvas ref={canvasRef} onClick={canvasClick}></canvas>
       <br />
       FPS: <span id="fps">{fps}</span>
       <br />
@@ -199,7 +210,7 @@ export default function CurveFit() {
         setK={(K: number) => {
           const newIP = { ...inferenceParameters, numParticles: K }
           setInferenceParameters(newIP)
-          animatorRef.current.setInferenceParameters(newIP)
+          animatorRef.current?.setInferenceParameters(newIP)
         }}
         setN={(N: number) => {
           const newIP = {
@@ -207,10 +218,10 @@ export default function CurveFit() {
             importanceSamplesPerParticle: N,
           }
           setInferenceParameters(newIP)
-          animatorRef.current.setInferenceParameters(newIP)
+          animatorRef.current?.setInferenceParameters(newIP)
         }}
       ></InferenceUI>
-      <div id="model-components">
+      <div ref={componentsRef} id="model-components">
         <div className="column">
           <ModelComponent
             name="polynomial"
@@ -218,7 +229,7 @@ export default function CurveFit() {
             onChange={(e) => {
               const ce = { ...componentEnable, polynomial: e.target.checked }
               setComponentEnable(ce)
-              animatorRef.current.setComponentEnable(ce)
+              animatorRef.current?.setComponentEnable(ce)
             }}
             equation="a_0 + a_1 x + a_2 x^2"
           >
@@ -254,7 +265,7 @@ export default function CurveFit() {
             onChange={(e) => {
               const ce = { ...componentEnable, periodic: e.target.checked }
               setComponentEnable(ce)
-              animatorRef.current.setComponentEnable(ce)
+              animatorRef.current?.setComponentEnable(ce)
             }}
             equation="A\sin(\phi + \omega x)"
           >
@@ -281,7 +292,7 @@ export default function CurveFit() {
           <input
             id="pause"
             type="checkbox"
-            onChange={(e) => animatorRef.current.setPause(e.target.checked)}
+            onChange={(e) => animatorRef.current?.setPause(e.target.checked)}
           />
           pause
         </label>
@@ -290,7 +301,7 @@ export default function CurveFit() {
           <input
             id="auto-SIR"
             type="checkbox"
-            onChange={(e) => animatorRef.current.setAutoSIR(e.target.checked)}
+            onChange={(e) => animatorRef.current?.setAutoSIR(e.target.checked)}
           />
           Auto-SIR
         </label>
@@ -300,7 +311,7 @@ export default function CurveFit() {
             id="visualizeInlierSigma"
             type="checkbox"
             onChange={(e) =>
-              animatorRef.current.setVisualizeInlierSigma(e.target.checked)
+              animatorRef.current?.setVisualizeInlierSigma(e.target.checked)
             }
           />
           viz inlier sigma
