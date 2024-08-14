@@ -5,6 +5,7 @@ import throttle from "lodash.throttle"
 import katex from "katex"
 import { InferenceParameters } from "./gpgpu.ts"
 import { RunningStats } from "./stats.ts"
+import { TypedObject } from './utils';
 
 class DistributionShape {
   public readonly name: string
@@ -39,6 +40,11 @@ export class XDistribution {
   public set(pName: string, value: number) {
     return this.parameters.set(pName, value)
   }
+  public assoc(pName: string, value: number) {
+    const ret = this.clone()
+    ret.set(pName, value)
+    return ret
+  }
   public clone(): XDistribution {
     return new XDistribution(this.shape, Array.from(this.parameters.values()))
   }
@@ -50,15 +56,15 @@ export class XDistribution {
 export const Normal = (mu: number, sigma: number) =>
   new XDistribution(NormalDistributionShape, [mu, sigma])
 
-export const modelParams: Map<string, XDistribution> = new Map([
-  ["a_0", Normal(0, 2)],
-  ["a_1", Normal(0, 2)],
-  ["a_2", Normal(0, 2)],
-  ["omega", Normal(0, 2)],
-  ["A", Normal(0, 2)],
-  ["phi", Normal(0, 2)],
-  ["inlier", Normal(0.3, 0.07)], // TODO: change to uniform
-])
+export const modelParams: TypedObject<XDistribution> = {
+  a_0: Normal(0, 2),
+  a_1: Normal(0, 2),
+  a_2: Normal(0, 2),
+  omega: Normal(0, 2),
+  A: Normal(0, 2),
+  phi: Normal(0, 2),
+  inlier: Normal(0.3, 0.07),
+};
 
 const defaultInferenceParameters: InferenceParameters = {
   importanceSamplesPerParticle: 1000,
@@ -81,27 +87,23 @@ export default function CurveFit() {
     return { points: points, evictionIndex: 0 }
   })
 
-  //const [modelParameters, setModelParameters] = useState([params.map(p => p.initialValue.mu), params.map(p=>p.initialValue.sigma))
-  //  TODO: do we need an initial copy?
+  
   const [emptyPosterior, setEmptyPosterior] = useState(0)
-  const [modelState, setModelState] = useState(new Map(modelParams.entries()))
-  const [posteriorState, setPosteriorState] = useState(
-    new Map(modelParams.entries()),
-  )
+  const [modelState, setModelState] = useState<TypedObject<XDistribution>>(modelParams);
+  const [posteriorState, setPosteriorState] = useState<TypedObject<XDistribution>>(modelParams);
 
-  const [componentEnable, setComponentEnable] = useState(
-    new Map().set("polynomial", true).set("periodic", true),
-  )
+  const [componentEnable, setComponentEnable] = useState<TypedObject<boolean>>({
+    polynomial: true,
+    periodic: true,
+  });
 
   const [ips, setIps] = useState(0.0)
   const [fps, setFps] = useState(0.0)
 
   function modelChange(k1: string, k2: string, v: number) {
-    console.log(`${k1}_${k2} -> ${v}`)
-    const updated_value = modelState.get(k1)!.clone()
-    updated_value.set(k2, v)
-    setModelState(new Map(modelState.entries()).set(k1, updated_value))
-    animatorRef.current.setModelParameters(modelState)
+    console.log(`${k1}_${k2} -> ${v}`);
+    setModelState({...modelState, [k1]: modelState[k1]!.assoc(k2, v)})
+    animatorRef.current.setModelParameters(modelState);
   }
 
   const [outlier, setOutlier] = useState(Normal(0, 0))
@@ -153,8 +155,8 @@ export default function CurveFit() {
   }, [])
 
   function Reset() {
-    setModelState(new Map(modelParams.entries()))
-    setPosteriorState(new Map(modelParams.entries()))
+    setModelState(modelParams)
+    setPosteriorState(modelParams)
     animatorRef.current.setModelParameters(modelParams)
     animatorRef.current.Reset()
   }
@@ -212,12 +214,9 @@ export default function CurveFit() {
         <div className="column">
           <ModelComponent
             name="polynomial"
-            enabled={componentEnable.get("polynomial")}
+            enabled={componentEnable.polynomial}
             onChange={(e) => {
-              const ce = new Map(componentEnable.entries()).set(
-                "polynomial",
-                e.target.checked,
-              )
+              const ce = { ...componentEnable, polynomial: e.target.checked }
               setComponentEnable(ce)
               animatorRef.current.setComponentEnable(ce)
             }}
@@ -227,8 +226,8 @@ export default function CurveFit() {
               <ComponentParameter
                 name={n}
                 tex_name={n}
-                value={modelState.get(n)!}
-                posterior_value={posteriorState.get(n)!}
+                value={modelState[n]}
+                posterior_value={posteriorState[n]}
                 onChange={modelChange}
               ></ComponentParameter>
             ))}
@@ -242,8 +241,8 @@ export default function CurveFit() {
             <ComponentParameter
               name="inlier"
               tex_name="\sigma_\mathrm{in}"
-              value={modelState.get("inlier")!}
-              posterior_value={posteriorState.get("inlier")!}
+              value={modelState.inlier}
+              posterior_value={posteriorState.inlier}
               onChange={modelChange}
             ></ComponentParameter>
           </ModelComponent>
@@ -251,12 +250,9 @@ export default function CurveFit() {
         <div className="column">
           <ModelComponent
             name="periodic"
-            enabled={componentEnable.get("periodic")}
+            enabled={componentEnable.periodic}
             onChange={(e) => {
-              const ce = new Map(componentEnable.entries()).set(
-                "periodic",
-                e.target.checked,
-              )
+              const ce = { ...componentEnable, periodic: e.target.checked }
               setComponentEnable(ce)
               animatorRef.current.setComponentEnable(ce)
             }}
@@ -270,8 +266,8 @@ export default function CurveFit() {
               <ComponentParameter
                 name={n}
                 tex_name={tn}
-                value={modelState.get(n)!}
-                posterior_value={posteriorState.get(n)!}
+                value={modelState[n]}
+                posterior_value={posteriorState[n]}
                 onChange={modelChange}
               ></ComponentParameter>
             ))}

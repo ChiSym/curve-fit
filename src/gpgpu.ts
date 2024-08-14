@@ -1,6 +1,7 @@
 import { XDistribution } from "./App"
 import { importanceShader } from "./shaders"
 import { WGL2Helper } from "./webgl"
+import { TypedObject } from './utils';
 
 export interface ResultBatch {
   model: Float32Array
@@ -20,8 +21,8 @@ interface Model {
 
 export interface ModelParameters {
   points: number[][]
-  coefficients: Map<string, XDistribution>
-  component_enable: Map<string, boolean>
+  coefficients: TypedObject<XDistribution>
+  component_enable: TypedObject<boolean>
 }
 
 export interface InferenceParameters {
@@ -168,16 +169,16 @@ export class GPGPU_Inference {
 
     gl.uniform1fv(
       this.alphaLocLoc,
-      Array.from(parameters.coefficients.values()).map((v) => v.get("mu")),
+      Array.from(Object.values(parameters.coefficients)).map((v) => v.get("mu")),
     )
     gl.uniform1fv(
       this.alphaScaleLoc,
-      Array.from(parameters.coefficients.values()).map((c) => c.get("sigma")),
+      Array.from(Object.values(parameters.coefficients)).map((c) => c.get("sigma")),
     )
 
     let enableBits = 0
-    if (parameters.component_enable.get("polynomial")) enableBits |= 1
-    if (parameters.component_enable.get("periodic")) enableBits |= 2
+    if (parameters.component_enable.polynomial) enableBits |= 1
+    if (parameters.component_enable.periodic) enableBits |= 2
 
     gl.uniform1ui(this.componentEnableLoc, enableBits)
   }

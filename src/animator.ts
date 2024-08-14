@@ -2,6 +2,7 @@ import { XDistribution } from "./App.tsx"
 import { GPGPU_Inference, InferenceParameters } from "./gpgpu.ts"
 import { Render } from "./render.ts"
 import { RunningStats } from "./stats.ts"
+import { TypedObject } from './utils';
 
 function log(level: string, message: unknown): void {
   if (level === "error") {
@@ -25,15 +26,15 @@ export interface InferenceReport {
 }
 
 export class Animator {
-  private modelParameters: Map<string, XDistribution>
+  private modelParameters: TypedObject<XDistribution>
   private readonly inferenceParameters: InferenceParameters
   private readonly inferenceReportCallback: (r: InferenceReport) => void
-  private readonly stats: Map<string, RunningStats>
+  private readonly stats: TypedObject<RunningStats>
   private points: number[][] = []
   private pause: boolean = false
   private autoSIR: boolean = false
   private visualizeInlierSigma: boolean = false
-  private componentEnable: Map<string, boolean> = new Map()
+  private componentEnable: TypedObject<boolean> = {}
   private frameCount = 0
   private totalFailedSamples = 0
   private t0: DOMHighResTimeStamp = performance.now()
@@ -42,17 +43,18 @@ export class Animator {
   // engine code to take multiple parameters, giving up old name
 
   constructor(
-    modelParameters: Map<string, XDistribution>,
+    modelParameters: TypedObject<XDistribution>,
     inferenceParameters: InferenceParameters,
     inferenceReportCallback: (r: InferenceReport) => void,
   ) {
     this.inferenceReportCallback = inferenceReportCallback
     // make copies of the initial values
-    this.modelParameters = new Map(modelParameters.entries())
-    this.inferenceParameters = Object.assign({}, inferenceParameters)
-    this.stats = new Map(
-      Array.from(modelParameters.keys()).map((k) => [k, new RunningStats()]),
-    )
+    this.modelParameters = { ...modelParameters }
+    this.inferenceParameters = { ...inferenceParameters };
+    this.stats = Object.keys(modelParameters).reduce((acc, k) => {
+      acc[k] = new RunningStats();
+      return acc;
+    }, {} as TypedObject<RunningStats>);
   }
 
   public setInferenceParameters(ps: InferenceParameters) {
@@ -62,13 +64,13 @@ export class Animator {
     this.Reset()
   }
 
-  public setModelParameters(params: Map<string, XDistribution>) {
-    this.modelParameters = new Map(params)
-    this.stats.forEach((s) => s.reset())
+  public setModelParameters(params: TypedObject<XDistribution>) {
+    this.modelParameters = { ...params }
+    Object.values(this.stats).forEach((s) => s.reset())
   }
 
   public setPoints(points: number[][]) {
-    this.points = points.map((v) => v.slice()) // make copy
+    this.points = points.map(v => [...v]) // make copy
   }
 
   public setPause(pause: boolean) {
@@ -83,13 +85,13 @@ export class Animator {
     this.visualizeInlierSigma = vis
   }
 
-  public setComponentEnable(componentEnable: Map<string, boolean>) {
-    this.componentEnable = new Map(componentEnable.entries())
+  public setComponentEnable(componentEnable: TypedObject<boolean>) {
+    this.componentEnable = { ...componentEnable }
   }
 
-  public getPosterior(): Map<string, XDistribution> {
-    return new Map(
-      Array.from(this.stats.entries()).map(([k, v]) => [k, v.summarize()]),
+  public getPosterior(): TypedObject<XDistribution> {
+    return Object.fromEntries(
+      Object.entries(this.stats).map(([k, v]) => [k, v.summarize()])
     )
   }
 
@@ -106,10 +108,10 @@ export class Animator {
     // XXX: could get the above two constants by looking at the HTML,
     // but we really should learn to use a framework at some point
     const gpu = new GPGPU_Inference(
-      this.modelParameters.size,
+      Object.keys(this.modelParameters).length,
       maxSamplesPerParticle,
     )
-    const renderer = new Render(this.modelParameters.size)
+    const renderer = new Render(Object.keys(this.modelParameters).length)
 
     let stopAnimation = false
     this.t0 = performance.now() // TODO: need to reset this from time to time along with frame count
@@ -134,12 +136,12 @@ export class Animator {
 
           for (const m of result.selectedModels) {
             let i = 0
-            for (const v of this.stats.values()) {
+            for (const v of Object.values(this.stats)) {
               v.observe(m.model[i++])
             }
             pOutlierStats.observe(m.p_outlier)
           }
-          ++this.frameCount
+          ++this.frameCount 
           const fps = Math.trunc(this.frameCount / ((t - this.t0) / 1e3))
           renderer.render(
             {
