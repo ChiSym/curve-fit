@@ -6,6 +6,8 @@ import katex from "katex"
 import { InferenceParameters } from "./gpgpu.ts"
 import { RunningStats } from "./stats.ts"
 import { TypedObject } from "./utils"
+import { Component } from "./live.tsx"
+import { LiveCanvas } from "@use-gpu/react"
 
 class DistributionShape {
   public readonly name: string
@@ -192,6 +194,9 @@ export default function CurveFit() {
 
   return (
     <>
+      <LiveCanvas>
+        {canvas => <Component canvas={canvas}></Component>}
+      </LiveCanvas>
       <canvas ref={canvasRef} onClick={canvasClick}></canvas>
       <br />
       FPS: <span id="fps">{fps}</span>
