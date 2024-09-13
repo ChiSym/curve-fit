@@ -3,7 +3,7 @@ import { Animator, InferenceReport } from "./animator.ts"
 import { useCallback, useState, useRef, ChangeEvent } from "react"
 import throttle from "lodash.throttle"
 import katex from "katex"
-import { InferenceParameters } from "./gpgpu.ts"
+import { InferenceParameters, InferenceResult } from "./gpgpu.ts"
 import { RunningStats } from "./stats.ts"
 import { TypedObject } from "./utils"
 import { Component } from "./live.tsx"
@@ -127,11 +127,13 @@ export default function CurveFit() {
     }
   }
 
+  const [inferenceResult, setInferenceResult] = useState<InferenceResult>({selectedModels: []})
+
   function setter(data: InferenceReport) {
     // This function is handed to the inference loop, which uses it to convey summary data
     // back to the UI.
     setEmptyPosterior(data.totalFailedSamples)
-    throttledSetIps(data.ips)
+    throttledSetIps(data.inferenceResult.ips)
     throttledSetFps(data.fps)
     setPOutlier(data.pOutlierStats)
     if (data.autoSIR) {
@@ -139,6 +141,7 @@ export default function CurveFit() {
     } else {
       throttledSetPosteriorState()
     }
+    setInferenceResult(data.inferenceResult)
   }
 
   const canvasRef = useCallback((canvas: HTMLCanvasElement | null) => {
@@ -194,8 +197,12 @@ export default function CurveFit() {
 
   return (
     <>
-      <LiveCanvas>
-        {(canvas) => <Component canvas={canvas}></Component>}
+
+      <LiveCanvas style={{width:400, height:400}}>
+        {canvas => (
+          <Component canvas={canvas} inferenceResult={inferenceResult}>
+          </Component>
+        )}
       </LiveCanvas>
       <canvas ref={canvasRef} onClick={canvasClick}></canvas>
       <br />

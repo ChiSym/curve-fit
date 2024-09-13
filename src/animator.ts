@@ -1,5 +1,5 @@
 import { XDistribution } from "./App.tsx"
-import { GPGPU_Inference, InferenceParameters } from "./gpgpu.ts"
+import { GPGPU_Inference, InferenceParameters, InferenceResult } from "./gpgpu.ts"
 import { Render } from "./render.ts"
 import { RunningStats } from "./stats.ts"
 import { TypedObject } from "./utils"
@@ -19,10 +19,10 @@ function log(level: string, message: unknown): void {
 
 export interface InferenceReport {
   fps: number
-  ips: number
   totalFailedSamples: number
   pOutlierStats: RunningStats
   autoSIR: boolean
+  inferenceResult: InferenceResult
 }
 
 export class Animator {
@@ -157,10 +157,10 @@ export class Animator {
           )
           const info = {
             totalFailedSamples: this.totalFailedSamples,
-            ips: result.ips,
             fps: fps,
             autoSIR: this.autoSIR,
             pOutlierStats: pOutlierStats,
+            inferenceResult: result
           }
           this.inferenceReportCallback(info)
           // emptyPosterior.innerText = totalFailedSamples.toString()

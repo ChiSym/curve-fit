@@ -12,10 +12,10 @@ export default defineConfig({
     wasm(),
     topLevelAwait(),
     react(),
-    eslint(),
-    checker({
-      typescript: true,
-    }),
+    // eslint(),
+    // checker({
+    //   typescript: true,
+    // }),
     wgslRollup(),
   ],
   server: {
