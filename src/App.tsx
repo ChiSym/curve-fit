@@ -195,7 +195,7 @@ export default function CurveFit() {
   return (
     <>
       <LiveCanvas>
-        {canvas => <Component canvas={canvas}></Component>}
+        {(canvas) => <Component canvas={canvas}></Component>}
       </LiveCanvas>
       <canvas ref={canvasRef} onClick={canvasClick}></canvas>
       <br />

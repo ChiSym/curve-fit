@@ -1,12 +1,12 @@
 {
-  "name": "genjs",
-  "private": true,
-  "version": "0.0.0",
-  "main": "index.html",
+  "name": "ts-vite-use-gpu-example",
+  "version": "1.0.0",
+  "main": "src/index.ts",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc -b && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
@@ -26,17 +26,15 @@
     "vite-plugin-checker": "^0.7.2",
     "vite-plugin-eslint": "^1.8.1",
     "vite-plugin-top-level-await": "^1.4.4",
-    "vite-plugin-wasm": "^3.3.0",
-    "@types/katex": "^0.16.7",
-    "@types/lodash.throttle": "^4.1.9",
-    "prettier": "^3.2.5",
-    "@lezer/common": "^1.0.0"
+    "vite-plugin-wasm": "^3.3.0"
   },
   "dependencies": {
     "@use-gpu/inspect": "^0.12.0-rc.2",
     "@use-gpu/inspect-gpu": "^0.12.0-rc.2",
     "@use-gpu/layout": "^0.12.0-rc.2",
-    "@use-gpu/plot": "^0.12.0-rc.2",
+    "@use-gpu/core": "^0.12.0-rc.2",
+    "@use-gpu/map": "^0.12.0-rc.2",
+    "@use-gpu/gltf": "^0.12.0-rc.2",
     "@use-gpu/live": "^0.12.0-rc.2",
     "@use-gpu/parse": "^0.12.0-rc.2",
     "@use-gpu/react": "^0.12.0-rc.2",
@@ -45,9 +43,8 @@
     "@use-gpu/webgpu": "^0.12.0-rc.2",
     "@use-gpu/wgsl-loader": "^0.12.0-rc.2",
     "@use-gpu/workbench": "^0.12.0-rc.2",
-    "katex": "^0.16.11",
-    "lodash.throttle": "^4.1.1",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "@use-gpu/plot": "^0.12.0-rc.2",
+    "react": "^18",
+    "react-dom": "^18"
   }
 }
