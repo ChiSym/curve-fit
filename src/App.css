@@ -12,6 +12,12 @@
   display: grid;
 }
 
+div.live-canvas {
+  width: 400px;
+  height: 400px;
+  position: relative;
+}
+
 .prior-component-title {
   text-align: center;
   font-weight: bold;

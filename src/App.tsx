@@ -100,6 +100,7 @@ export default function CurveFit() {
 
   const [ips, setIps] = useState(0.0)
   const [fps, setFps] = useState(0.0)
+  const [visualizeInlierSigma, setVisualizeInlierSigma] = useState(false)
 
   function modelChange(k1: string, k2: string, v: number) {
     console.log(`${k1}_${k2} -> ${v}`)
@@ -127,7 +128,11 @@ export default function CurveFit() {
     }
   }
 
-  const [inferenceResult, setInferenceResult] = useState<InferenceResult>({selectedModels: []})
+  const [inferenceResult, setInferenceResult] = useState<InferenceResult>({
+    selectedModels: [],
+    ips: 0,
+    failedSamples: 0
+  })
 
   function setter(data: InferenceReport) {
     // This function is handed to the inference loop, which uses it to convey summary data
@@ -177,11 +182,13 @@ export default function CurveFit() {
     animatorRef.current?.Reset()
   }
 
-  function canvasClick(event: React.MouseEvent<HTMLCanvasElement>) {
-    const target = event.target as HTMLCanvasElement
-    const rect = target.getBoundingClientRect()
-    const x = ((event.clientX - rect.left) / target.width) * 2.0 - 1.0
-    const y = ((event.clientY - rect.top) / target.height) * -2.0 + 1.0
+  function canvasClick(event: React.MouseEvent<HTMLElement>) {
+    console.log('event.target', event.target)
+    const canvas = event.target as HTMLCanvasElement
+    const rect = canvas.getBoundingClientRect()
+    console.log(rect)
+    const x = ((event.clientX - rect.left) / rect.width) * 2.0 - 1.0
+    const y = ((event.clientY - rect.top) / rect.height) * -2.0 + 1.0
 
     const ps = points.points
     let i = points.evictionIndex
@@ -198,13 +205,14 @@ export default function CurveFit() {
   return (
     <>
 
-      <LiveCanvas style={{width:400, height:400}}>
-        {canvas => (
-          <Component canvas={canvas} inferenceResult={inferenceResult}>
-          </Component>
-        )}
-      </LiveCanvas>
-      <canvas ref={canvasRef} onClick={canvasClick}></canvas>
+      <div className="live-canvas" onClick={canvasClick}>
+        <LiveCanvas>
+          {canvas => <Component canvas={canvas} inferenceResult={inferenceResult} points={points.points} visualizeInlierSigma={visualizeInlierSigma}/>}
+        </LiveCanvas>
+      </div>
+      <div className="manual-canvas">
+        <canvas ref={canvasRef}></canvas>
+      </div>
       <br />
       FPS: <span id="fps">{fps}</span>
       <br />
@@ -322,9 +330,10 @@ export default function CurveFit() {
           <input
             id="visualizeInlierSigma"
             type="checkbox"
-            onChange={(e) =>
+            onChange={(e) => {
               animatorRef.current?.setVisualizeInlierSigma(e.target.checked)
-            }
+              setVisualizeInlierSigma(e.target.checked)
+            }}
           />
           viz inlier sigma
         </label>

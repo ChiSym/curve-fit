@@ -3,18 +3,18 @@
 import type { LC, PropsWithChildren } from "@use-gpu/live"
 import { into } from "@use-gpu/live"
 import { AutoCanvas, WebGPU } from "@use-gpu/webgpu"
-//import { Cartesian, Axis, Grid } from "@use-gpu/plot"
 import { HTML } from "@use-gpu/react"
-import { Animate, Environment, FlatCamera, FontLoader, LinearRGB, LineLayer, PanControls, Pass, PointLayer } from "@use-gpu/workbench"
-import { Block, Flex, Inline, Layout, UI, Text } from "@use-gpu/layout"
+import { FlatCamera, FontLoader, PanControls, Pass } from "@use-gpu/workbench"
 import { FALLBACK_MESSAGE } from "./fallback"
-import { Axis, Cartesian, Grid, Label, Line, Plot, Point, Sampler, Scale, Scissor, Surface, Tick, Transform, Transpose } from "@use-gpu/plot"
+import { Axis, Grid, Line, Plot, Point, Polygon, Transform } from "@use-gpu/plot"
 import { InferenceResult } from "./gpgpu"
 
 
 type ComponentProps = {
   canvas: HTMLCanvasElement
   inferenceResult: InferenceResult
+  visualizeInlierSigma: boolean
+  points: number[][]
 }
 
 // const FONTS = [
@@ -34,7 +34,7 @@ for (let i = 0, x = -1; i < xs.length; ++i, x += h) xs[i] = x
 export const Component: LC<ComponentProps> = (
   props: PropsWithChildren<ComponentProps>,
 ) => {
-  const { canvas, inferenceResult } = props
+  const { canvas, inferenceResult, points, visualizeInlierSigma } = props
   function modelToFn(model: Float32Array) {
     return (x: number) => {
       const [a0, a1, a2, omega, A, phi] = model
@@ -45,49 +45,37 @@ export const Component: LC<ComponentProps> = (
     const f = modelToFn(m.model)
     return xs.map(x => [x, f(x)])
   })
+  const outlierCounts = new Array(points.length).fill(0)
+  inferenceResult.selectedModels.forEach(m => {
+    for (let b = 1, i = 0; i < points.length; ++i, b <<= 1) {
+      if ((m.outlier & b) != 0) {
+        ++outlierCounts[i]
+      }
+    }
+  })
+  const colors = outlierCounts.map(c => {
+    const k = c / inferenceResult.selectedModels.length
+    return [k,0,1-k,1]
+  })
   return (
     <WebGPU
       fallback={(error: Error) => <HTML>{into(FALLBACK_MESSAGE(error))}</HTML>}
     >
       <FontLoader>
-        <AutoCanvas canvas={canvas}>
+        <AutoCanvas backgroundColor={[0.9,0.9,0.9,1.0]} canvas={canvas}>
           <Camera>
             <Pass>
-              <UI>
-                <Layout>
-                  <Flex height={400} width={400} align="between" fill="#ff000020">
-                    <Flex width={300} height={180} fill="#00ff0030" direction="y">
-                      <Inline>
-                        <Text
-                          size={48}
-                          detail={64}
-                          snap={false}
-                          text={"Hello World"}
-                          family="Lato"
-                          color="#ff00ff"
-                        />
-                      </Inline>
-                      <Flex width={300} height={100} fill="#0000ff30">
-                      </Flex>
-                    </Flex>
-                  </Flex>
-                </Layout>
-              </UI>
               <Plot>
-                <Grid axes="xy">
-
-                </Grid>
                 <Transform position={[200,200]} scale={[200, -200]}>
-                  <Point position={[-0.9,-0.9]} shape='circle' size={10} color={'#f00'}></Point>
-                  <Point position={[0.9,-0.9]} shape='circle' size={10} color={'#0f0'}></Point>
-                  <Point position={[-0.9,0.9]} shape='circle' size={10} color={'#00f'}></Point>
-                  <Point position={[0.9,0.9]} shape='circle' size={10} color={'#f0f'}></Point>
-                  <Line positions={pts} color={'#ff0'}></Line>
-                  <Line positions={[[-0.9,-0.9], [0.9,0.9]]} color={'#fff'}></Line>
+                  <Grid first={{divide: 20}} second={{divide: 20}} width={2} axes="xy" color="#eee">
+                  </Grid>
+                  <Axis axis="x" origin={[0,0]} color="#fff" width={2}></Axis>
+                  <Axis axis="y" origin={[0,0]} color="#fff" width={2}></Axis>
+                  <Point positions={points} colors={colors} size={10}></Point>
+                  <Line zIndex={1} width={2} positions={pts} color={[0.0,0.0,0.0,0.6]}></Line>
+                  {visualizeInlierSigma ? <InlierSigma positions={points} radii={inferenceResult.selectedModels.map(m => m.inlier_sigma)}/> : null}
                 </Transform>
               </Plot>
-              <PointLayer shape='circle' position={[0,0]} size={10} color={[0.8,0.8,1.0,1.0]}>
-              </PointLayer>
             </Pass>
           </Camera>
         </AutoCanvas>
@@ -95,6 +83,39 @@ export const Component: LC<ComponentProps> = (
     </WebGPU>
   )
 }
+
+type CircleProps = {
+  positions: number[][]
+  radii: number[]
+}
+
+const InlierSigma: LC<CircleProps> = (props: CircleProps) => {
+  // For each position in positions, draws circles of each radius centered at that point.
+  const {positions, radii} = props
+  const N = 45  // number of polygon segments to approximate circle
+  const da = 2 * Math.PI / N
+  const pts = new Array(positions.length)
+  for (let i = 0; i < positions.length; ++i) {
+    pts[i] = new Array(radii.length)
+    for (let j = 0; j < radii.length; ++j) {
+      pts[i][j] = new Array(N)
+    }
+  }
+  for (let k = 0, a = 0; k < N; ++k, a += da) {
+    const x = Math.cos(a)
+    const y = Math.sin(a)
+    for (let j = 0; j < radii.length; ++j) {
+      const rx = radii[j] * x
+      const ry = radii[j] * y
+      for (let i = 0; i < positions.length; ++i) {
+        pts[i][j][k] = [rx + positions[i][0], ry + positions[i][1]]
+      }
+    }
+  }
+  return <Polygon positions={pts} width={2} stroke={[0.7,1.0,0.7,0.8]}></Polygon>
+}
+
+
 
 // Wrap this in its own component to avoid JSX trashing of the view
 type CameraProps = PropsWithChildren<object>
