@@ -2,7 +2,7 @@ import type { LC, PropsWithChildren } from "@use-gpu/live"
 import { into } from "@use-gpu/live"
 import { AutoCanvas, WebGPU } from "@use-gpu/webgpu"
 import { HTML } from "@use-gpu/react"
-import { FlatCamera, FontLoader, PanControls, Pass } from "@use-gpu/workbench"
+import { FlatCamera, PanControls, Pass } from "@use-gpu/workbench"
 import { FALLBACK_MESSAGE } from "./fallback"
 import {
   Axis,
@@ -56,42 +56,40 @@ export const Component: LC<ComponentProps> = (
     <WebGPU
       fallback={(error: Error) => <HTML>{into(FALLBACK_MESSAGE(error))}</HTML>}
     >
-      <FontLoader>
-        <AutoCanvas backgroundColor={[0.9, 0.9, 0.9, 1.0]} canvas={canvas}>
-          <Camera>
-            <Pass>
-              <Plot>
-                <Transform position={[200, 200]} scale={[200, -200]}>
-                  <Grid
-                    first={{ divide: 20 }}
-                    second={{ divide: 20 }}
-                    width={2}
-                    axes="xy"
-                    color="#eee"
-                  ></Grid>
-                  <Axis axis="x" origin={[0, 0]} color="#fff" width={2}></Axis>
-                  <Axis axis="y" origin={[0, 0]} color="#fff" width={2}></Axis>
-                  <Point positions={points} colors={colors} size={10}></Point>
-                  <Line
-                    zIndex={1}
-                    width={2}
-                    positions={pts}
-                    color={[0.0, 0.0, 0.0, 0.6]}
-                  ></Line>
-                  {visualizeInlierSigma ? (
-                    <InlierSigma
-                      positions={points}
-                      sigmas={inferenceResult.selectedModels.map(
-                        (m) => m.inlier_sigma,
-                      )}
-                    />
-                  ) : null}
-                </Transform>
-              </Plot>
-            </Pass>
-          </Camera>
-        </AutoCanvas>
-      </FontLoader>
+      <AutoCanvas backgroundColor={[0.9, 0.9, 0.9, 1.0]} canvas={canvas}>
+        <Camera>
+          <Pass>
+            <Plot>
+              <Transform position={[200, 200]} scale={[200, -200]}>
+                <Grid
+                  first={{ divide: 20 }}
+                  second={{ divide: 20 }}
+                  width={2}
+                  axes="xy"
+                  color="#eee"
+                ></Grid>
+                <Axis axis="x" origin={[0, 0]} color="#fff" width={2}></Axis>
+                <Axis axis="y" origin={[0, 0]} color="#fff" width={2}></Axis>
+                <Point positions={points} colors={colors} size={10}></Point>
+                <Line
+                  zIndex={1}
+                  width={2}
+                  positions={pts}
+                  color={[0.0, 0.0, 0.0, 0.6]}
+                ></Line>
+                {visualizeInlierSigma ? (
+                  <InlierSigma
+                    positions={points}
+                    sigmas={inferenceResult.selectedModels.map(
+                      (m) => m.inlier_sigma,
+                    )}
+                  />
+                ) : null}
+              </Transform>
+            </Plot>
+          </Pass>
+        </Camera>
+      </AutoCanvas>
     </WebGPU>
   )
 }
