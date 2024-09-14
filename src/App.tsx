@@ -105,6 +105,7 @@ export default function CurveFit() {
   const [ips, setIps] = useState(0.0)
   const [fps, setFps] = useState(0.0)
   const [visualizeInlierSigma, setVisualizeInlierSigma] = useState(false)
+  const [autoSIR, setAutoSIR] = useState(false)
 
   function modelChange(k1: string, k2: string, v: number) {
     setModelState({ ...modelState, [k1]: modelState[k1]!.assoc(k2, v) })
@@ -326,7 +327,12 @@ export default function CurveFit() {
           <input
             id="auto-SIR"
             type="checkbox"
-            onChange={(e) => animatorRef.current?.setAutoSIR(e.target.checked)}
+            checked={autoSIR}
+            onChange={(e) => {
+              const b: boolean = e.target.checked
+              setAutoSIR(b)
+              animatorRef.current?.setAutoSIR(b)
+            }}
           />
           Auto-SIR
         </label>
@@ -341,7 +347,7 @@ export default function CurveFit() {
         </label>
       </div>
       <div className="card">
-        <button id="sir" type="button" onClick={SIR_Update}>
+        <button id="sir" type="button" onClick={SIR_Update} disabled={autoSIR}>
           Update my priors, SIR!
         </button>
         <button id="reset-priors" type="button" onClick={Reset}>
