@@ -1,6 +1,5 @@
 import React from "react"
 
-
 export const FALLBACK_MESSAGE = (error: Error) => (
   <React.Fragment>
     <div className="error-message">{error.toString()}</div>

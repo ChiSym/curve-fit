@@ -1,6 +1,9 @@
 import { XDistribution } from "./App.tsx"
-import { GPGPU_Inference, InferenceParameters, InferenceResult } from "./gpgpu.ts"
-import { Render } from "./render.ts"
+import {
+  GPGPU_Inference,
+  InferenceParameters,
+  InferenceResult,
+} from "./gpgpu.ts"
 import { RunningStats } from "./stats.ts"
 import { TypedObject } from "./utils"
 
@@ -33,22 +36,18 @@ export class Animator {
   private points: number[][] = []
   private pause: boolean = false
   private autoSIR: boolean = false
-  private visualizeInlierSigma: boolean = false
   private componentEnable: TypedObject<boolean> = {}
   private frameCount = 0
   private totalFailedSamples = 0
   private t0: DOMHighResTimeStamp = performance.now()
-  private canvas: HTMLCanvasElement
   // TODO: define type ModelParameters as Map<string, Distribution>; change signature of inference
   // engine code to take multiple parameters, giving up old name
 
   constructor(
-    canvas: HTMLCanvasElement,
     modelParameters: TypedObject<XDistribution>,
     inferenceParameters: InferenceParameters,
     inferenceReportCallback: (r: InferenceReport) => void,
   ) {
-    this.canvas = canvas
     this.inferenceReportCallback = inferenceReportCallback
     // make copies of the initial values
     this.modelParameters = { ...modelParameters }
@@ -83,10 +82,6 @@ export class Animator {
     this.autoSIR = autoSIR
   }
 
-  public setVisualizeInlierSigma(vis: boolean) {
-    this.visualizeInlierSigma = vis
-  }
-
   public setComponentEnable(componentEnable: TypedObject<boolean>) {
     this.componentEnable = { ...componentEnable }
   }
@@ -104,7 +99,7 @@ export class Animator {
   }
 
   // Sets up and runs the inference animation. Returns a function which can
-  // be used to halt the animation (after the current frame is rendered).
+  // be used to halt the animation (after the current frame is done).
   public run(): () => void {
     const maxSamplesPerParticle = 100_000
     // XXX: could get the above two constants by looking at the HTML,
@@ -112,10 +107,6 @@ export class Animator {
     const gpu = new GPGPU_Inference(
       Object.keys(this.modelParameters).length,
       maxSamplesPerParticle,
-    )
-    const renderer = new Render(
-      this.canvas,
-      Object.keys(this.modelParameters).length,
     )
 
     let stopAnimation = false
@@ -148,19 +139,12 @@ export class Animator {
           }
           ++this.frameCount
           const fps = Math.trunc(this.frameCount / ((t - this.t0) / 1e3))
-          renderer.render(
-            {
-              points: this.points,
-              visualizeInlierSigma: this.visualizeInlierSigma,
-            },
-            result,
-          )
           const info = {
             totalFailedSamples: this.totalFailedSamples,
             fps: fps,
             autoSIR: this.autoSIR,
             pOutlierStats: pOutlierStats,
-            inferenceResult: result
+            inferenceResult: result,
           }
           this.inferenceReportCallback(info)
           // emptyPosterior.innerText = totalFailedSamples.toString()

@@ -131,7 +131,7 @@ export default function CurveFit() {
   const [inferenceResult, setInferenceResult] = useState<InferenceResult>({
     selectedModels: [],
     ips: 0,
-    failedSamples: 0
+    failedSamples: 0,
   })
 
   function setter(data: InferenceReport) {
@@ -152,10 +152,9 @@ export default function CurveFit() {
   const canvasRef = useCallback((canvas: HTMLCanvasElement | null) => {
     if (canvas) {
       const a = (animatorRef.current = new Animator(
-        canvas,
         modelParams,
         defaultInferenceParameters,
-        setter,
+        setter
       ))
       a.setInferenceParameters(inferenceParameters)
       a.setModelParameters(modelParams)
@@ -183,7 +182,7 @@ export default function CurveFit() {
   }
 
   function canvasClick(event: React.MouseEvent<HTMLElement>) {
-    console.log('event.target', event.target)
+    console.log("event.target", event.target)
     const canvas = event.target as HTMLCanvasElement
     const rect = canvas.getBoundingClientRect()
     console.log(rect)
@@ -204,10 +203,16 @@ export default function CurveFit() {
 
   return (
     <>
-
       <div className="live-canvas" onClick={canvasClick}>
         <LiveCanvas>
-          {canvas => <Component canvas={canvas} inferenceResult={inferenceResult} points={points.points} visualizeInlierSigma={visualizeInlierSigma}/>}
+          {(canvas) => (
+            <Component
+              canvas={canvas}
+              inferenceResult={inferenceResult}
+              points={points.points}
+              visualizeInlierSigma={visualizeInlierSigma}
+            />
+          )}
         </LiveCanvas>
       </div>
       <div className="manual-canvas">
@@ -330,10 +335,7 @@ export default function CurveFit() {
           <input
             id="visualizeInlierSigma"
             type="checkbox"
-            onChange={(e) => {
-              animatorRef.current?.setVisualizeInlierSigma(e.target.checked)
-              setVisualizeInlierSigma(e.target.checked)
-            }}
+            onChange={(e) => setVisualizeInlierSigma(e.target.checked)}
           />
           viz inlier sigma
         </label>

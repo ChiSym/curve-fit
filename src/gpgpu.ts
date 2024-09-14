@@ -169,11 +169,11 @@ export class GPGPU_Inference {
 
     gl.uniform1fv(
       this.alphaLocLoc,
-      Object.values(parameters.coefficients).map(v => v.get('mu'))
+      Object.values(parameters.coefficients).map((v) => v.get("mu")),
     )
     gl.uniform1fv(
       this.alphaScaleLoc,
-      Object.values(parameters.coefficients).map(c => c.get('sigma'))
+      Object.values(parameters.coefficients).map((c) => c.get("sigma")),
     )
 
     let enableBits = 0
