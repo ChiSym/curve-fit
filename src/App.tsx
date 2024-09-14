@@ -1,6 +1,6 @@
 import "./App.css"
 import { Animator, InferenceReport } from "./animator.ts"
-import { useCallback, useState, useRef, ChangeEvent } from "react"
+import { useCallback, useState, useRef, ChangeEvent, useEffect } from "react"
 import throttle from "lodash.throttle"
 import katex from "katex"
 import { InferenceParameters, InferenceResult } from "./gpgpu.ts"
@@ -19,6 +19,10 @@ class DistributionShape {
 }
 
 const NormalDistributionShape = new DistributionShape("normal", ["mu", "sigma"])
+
+// Selector values for the number of importance samples to draw per frame
+const Ns = [100, 1000, 5000, 10000, 50000, 100000]
+const maxN = Math.max(...Ns)
 
 export class XDistribution {
   public readonly shape: DistributionShape
@@ -103,7 +107,6 @@ export default function CurveFit() {
   const [visualizeInlierSigma, setVisualizeInlierSigma] = useState(false)
 
   function modelChange(k1: string, k2: string, v: number) {
-    console.log(`${k1}_${k2} -> ${v}`)
     setModelState({ ...modelState, [k1]: modelState[k1]!.assoc(k2, v) })
     animatorRef.current?.setModelParameters(modelState)
   }
@@ -149,19 +152,18 @@ export default function CurveFit() {
     setInferenceResult(data.inferenceResult)
   }
 
-  const canvasRef = useCallback((canvas: HTMLCanvasElement | null) => {
-    if (canvas) {
-      const a = (animatorRef.current = new Animator(
-        modelParams,
-        defaultInferenceParameters,
-        setter,
-      ))
-      a.setInferenceParameters(inferenceParameters)
-      a.setModelParameters(modelParams)
-      a.setPoints(points.points)
-      a.setComponentEnable(componentEnable)
-      return a.run()
-    }
+  useEffect(() => {
+    const a = (animatorRef.current = new Animator(
+      modelParams,
+      defaultInferenceParameters,
+      maxN,
+      setter,
+    ))
+    a.setInferenceParameters(inferenceParameters)
+    a.setModelParameters(modelParams)
+    a.setPoints(points.points)
+    a.setComponentEnable(componentEnable)
+    return a.run()
   }, [])
 
   const componentsRef = useCallback((element: HTMLElement | null) => {
@@ -182,10 +184,8 @@ export default function CurveFit() {
   }
 
   function canvasClick(event: React.MouseEvent<HTMLElement>) {
-    console.log("event.target", event.target)
     const canvas = event.target as HTMLCanvasElement
     const rect = canvas.getBoundingClientRect()
-    console.log(rect)
     const x = ((event.clientX - rect.left) / rect.width) * 2.0 - 1.0
     const y = ((event.clientY - rect.top) / rect.height) * -2.0 + 1.0
 
@@ -215,9 +215,6 @@ export default function CurveFit() {
           )}
         </LiveCanvas>
       </div>
-      <div className="manual-canvas">
-        <canvas ref={canvasRef}></canvas>
-      </div>
       <br />
       FPS: <span id="fps">{fps}</span>
       <br />
@@ -230,6 +227,7 @@ export default function CurveFit() {
         </span>
       )}
       <InferenceUI
+        Ns={Ns}
         K={inferenceParameters.numParticles}
         N={inferenceParameters.importanceSamplesPerParticle}
         setK={(K: number) => {
@@ -261,6 +259,7 @@ export default function CurveFit() {
             {["a_0", "a_1", "a_2"].map((n) => (
               <ComponentParameter
                 name={n}
+                key={n}
                 tex_name={n}
                 value={modelState[n]}
                 posterior_value={posteriorState[n]}
@@ -301,6 +300,7 @@ export default function CurveFit() {
             ].map(([n, tn]) => (
               <ComponentParameter
                 name={n}
+                key={n}
                 tex_name={tn}
                 value={modelState[n]}
                 posterior_value={posteriorState[n]}
@@ -406,7 +406,7 @@ function ComponentParameter({
     const joint_name = name + "_" + innerName
     const keyName = innerName
     return (
-      <>
+      <div key={keyName}>
         <span
           className="katex-render"
           katex-source={
@@ -428,7 +428,7 @@ function ComponentParameter({
           {posterior_value.get(keyName).toFixed(2)}
         </span>
         <br />
-      </>
+      </div>
     )
   })
 
@@ -436,17 +436,19 @@ function ComponentParameter({
 }
 
 function InferenceUI({
+  Ns,
   K,
   N,
   setK,
   setN,
 }: {
+  Ns: number[]
   K: number
   N: number
   setK: (k: number) => void
   setN: (n: number) => void
 }) {
-  const ns = [100, 1000, 5000, 10000, 50000, 100000].map((i) => (
+  const n_options = Ns.map((i) => (
     <option key={i} value={i}>
       {i.toLocaleString()}
     </option>
@@ -465,7 +467,7 @@ function InferenceUI({
         value={N}
         onChange={(e) => setN(parseInt(e.target.value))}
       >
-        {ns}
+        {n_options}
       </select>
       &nbsp;&nbsp;
       <label htmlFor="numParticles">K =</label>

@@ -33,6 +33,7 @@ export class Animator {
   private readonly inferenceParameters: InferenceParameters
   private readonly inferenceReportCallback: (r: InferenceReport) => void
   private readonly stats: TypedObject<RunningStats>
+  private readonly maxSamplesPerParticle: number
   private points: number[][] = []
   private pause: boolean = false
   private autoSIR: boolean = false
@@ -40,18 +41,18 @@ export class Animator {
   private frameCount = 0
   private totalFailedSamples = 0
   private t0: DOMHighResTimeStamp = performance.now()
-  // TODO: define type ModelParameters as Map<string, Distribution>; change signature of inference
-  // engine code to take multiple parameters, giving up old name
 
   constructor(
     modelParameters: TypedObject<XDistribution>,
     inferenceParameters: InferenceParameters,
+    maxSamplesPerParticle: number,
     inferenceReportCallback: (r: InferenceReport) => void,
   ) {
     this.inferenceReportCallback = inferenceReportCallback
     // make copies of the initial values
     this.modelParameters = { ...modelParameters }
     this.inferenceParameters = { ...inferenceParameters }
+    this.maxSamplesPerParticle = maxSamplesPerParticle
     this.stats = Object.keys(modelParameters).reduce((acc, k) => {
       acc[k] = new RunningStats()
       return acc
@@ -101,12 +102,11 @@ export class Animator {
   // Sets up and runs the inference animation. Returns a function which can
   // be used to halt the animation (after the current frame is done).
   public run(): () => void {
-    const maxSamplesPerParticle = 100_000
     // XXX: could get the above two constants by looking at the HTML,
     // but we really should learn to use a framework at some point
     const gpu = new GPGPU_Inference(
       Object.keys(this.modelParameters).length,
-      maxSamplesPerParticle,
+      this.maxSamplesPerParticle,
     )
 
     let stopAnimation = false

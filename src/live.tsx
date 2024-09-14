@@ -130,7 +130,7 @@ const InlierSigma: LC<InlierSigmaProps> = (props: InlierSigmaProps) => {
     }
   }
   return (
-    <Polygon positions={pts} width={2} stroke={[0.7, 1.0, 0.7, 0.8]}></Polygon>
+    <Polygon positions={pts} width={2} stroke={[0.0, 1.0, 0.0, 1.0]}></Polygon>
   )
 }
 
