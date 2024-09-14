@@ -1,6 +1,5 @@
 {
   "tabWidth": 2,
   "useTabs": false,
-  "semi": false,
-  "files": "src/**/*.ts"
+  "semi": false
 }

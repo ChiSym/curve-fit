@@ -9,11 +9,3 @@ export function setItem<T>(
 ): TypedObject<T> {
   return { ...obj, [key]: value }
 }
-
-export function deleteItem<T>(
-  obj: TypedObject<T>,
-  key: string,
-): TypedObject<T> {
-  const { [key]: _, ...rest } = obj
-  return rest
-}

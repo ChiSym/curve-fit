@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 import type { LC, PropsWithChildren } from "@use-gpu/live"
 import { into } from "@use-gpu/live"
 import { AutoCanvas, WebGPU } from "@use-gpu/webgpu"
