@@ -33,7 +33,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: website
-          path: ./site
+          path: ./dist
 
   publish:
     needs: build-deploy
