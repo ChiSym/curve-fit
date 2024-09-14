@@ -12,11 +12,19 @@
   display: grid;
 }
 
+div#inference {
+  width: 600px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-gap: 10px;
+}
+
 div.live-canvas {
   width: 400px;
   height: 400px;
   position: relative;
 }
+
 
 .prior-component-title {
   text-align: center;

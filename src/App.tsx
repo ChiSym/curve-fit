@@ -8,6 +8,7 @@ import { RunningStats } from "./stats.ts"
 import { TypedObject } from "./utils"
 import { Component } from "./live.tsx"
 import { LiveCanvas } from "@use-gpu/react"
+import GaugeComponent from "react-gauge-component"
 
 class DistributionShape {
   public readonly name: string
@@ -113,8 +114,11 @@ export default function CurveFit() {
   }
 
   const [outlier, setOutlier] = useState(Normal(0, 0))
-  const setPOutlier = throttle((outlierStats: RunningStats) => {
+  const [inlierSigma, setInlierSigma] = useState(Normal(0, 0))
+
+  const setStats = throttle((outlierStats, inlierSigmaStats: RunningStats) => {
     setOutlier(outlierStats.summarize())
+    setInlierSigma(inlierSigmaStats.summarize())
   }, 250)
 
   const throttledSetIps = throttle(setIps, 500)
@@ -144,7 +148,7 @@ export default function CurveFit() {
     setEmptyPosterior(data.totalFailedSamples)
     throttledSetIps(data.inferenceResult.ips)
     throttledSetFps(data.fps)
-    setPOutlier(data.pOutlierStats)
+    setStats(data.pOutlierStats, data.inlierSigmaStats)
     if (data.autoSIR) {
       SIR_Update()
     } else {
@@ -204,29 +208,46 @@ export default function CurveFit() {
 
   return (
     <>
-      <div className="live-canvas" onClick={canvasClick}>
-        <LiveCanvas>
-          {(canvas) => (
-            <Component
-              canvas={canvas}
-              inferenceResult={inferenceResult}
-              points={points.points}
-              visualizeInlierSigma={visualizeInlierSigma}
-            />
-          )}
-        </LiveCanvas>
+      <div id="inference">
+        <div className="live-canvas" onClick={canvasClick}>
+          <LiveCanvas>
+            {(canvas) => (
+              <Component
+                canvas={canvas}
+                inferenceResult={inferenceResult}
+                points={points.points}
+                visualizeInlierSigma={visualizeInlierSigma}
+              />
+            )}
+          </LiveCanvas>
+        </div>
+        <div id="inference-gauges">
+          <div>
+            <GaugeComponent
+              id="outlier-gauge"
+              className="inference-gauge"
+              value={outlier.get('mu')}
+              minValue={0.0}
+              maxValue={1.0}
+              labels={{valueLabel: {style: {textShadow: 'none', fill: '#000'},
+              formatTextValue: (v => Number(v).toFixed(2))}}}
+              arc={{subArcs: [{length: 0.33, color: '#0f0'}, {length: 0.33, color: '#ff0'}, {length: 0.33, color:'#f00'}]}} />
+              <span>p<sub>outlier</sub></span>
+              </div>
+          <div>
+            <GaugeComponent
+              id="inlier-sigma-gauge"
+              className="inference-gauge"
+              value={inlierSigma.get('mu')}
+              minValue={0.0}
+              maxValue={1.0}
+              labels={{valueLabel: {style: {textShadow: 'none', fill: '#000'},
+              formatTextValue: (v => Number(v).toFixed(2))}}}
+              arc={{subArcs: [{length: 0.33, color: '#0f0'}, {length: 0.33, color: '#ff0'}, {length: 0.33, color:'#f00'}]}} />
+              <span>&sigma;<sub>inlier</sub></span>
+              </div>
+        </div>
       </div>
-      <br />
-      FPS: <span id="fps">{fps}</span>
-      <br />
-      IPS: <span id="ips">{(ips / 1e6).toFixed(2) + " M"}</span>
-      <br />
-      {(outlier.get("mu") || outlier.get("sigma")) && (
-        <span id="outlier">
-          p<sub>outlier</sub> = {outlier.get("mu").toFixed(2)} &plusmn;{" "}
-          {outlier.get("sigma").toFixed(2)}
-        </span>
-      )}
       <InferenceUI
         Ns={Ns}
         K={inferenceParameters.numParticles}
@@ -309,6 +330,11 @@ export default function CurveFit() {
               ></ComponentParameter>
             ))}
           </ModelComponent>
+          FPS: <span id="fps">{fps}</span>
+          <br />
+          IPS: <span id="ips">{(ips / 1e6).toFixed(2) + " M"}</span>
+          <br />
+
         </div>
       </div>
       <div className="extra-components">

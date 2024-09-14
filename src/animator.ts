@@ -24,6 +24,7 @@ export interface InferenceReport {
   fps: number
   totalFailedSamples: number
   pOutlierStats: RunningStats
+  inlierSigmaStats: RunningStats
   autoSIR: boolean
   inferenceResult: InferenceResult
 }
@@ -129,6 +130,7 @@ export class Animator {
           this.totalFailedSamples += result.failedSamples
 
           const pOutlierStats = new RunningStats()
+          const inlierSigmaStats = new RunningStats()
 
           for (const m of result.selectedModels) {
             let i = 0
@@ -136,6 +138,7 @@ export class Animator {
               v.observe(m.model[i++])
             }
             pOutlierStats.observe(m.p_outlier)
+            inlierSigmaStats.observe(m.inlier_sigma)
           }
           ++this.frameCount
           const fps = Math.trunc(this.frameCount / ((t - this.t0) / 1e3))
@@ -144,6 +147,7 @@ export class Animator {
             fps: fps,
             autoSIR: this.autoSIR,
             pOutlierStats: pOutlierStats,
+            inlierSigmaStats: inlierSigmaStats,
             inferenceResult: result,
           }
           this.inferenceReportCallback(info)
