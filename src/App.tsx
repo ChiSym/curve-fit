@@ -154,7 +154,7 @@ export default function CurveFit() {
       const a = (animatorRef.current = new Animator(
         modelParams,
         defaultInferenceParameters,
-        setter
+        setter,
       ))
       a.setInferenceParameters(inferenceParameters)
       a.setModelParameters(modelParams)
