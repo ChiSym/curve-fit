@@ -236,8 +236,8 @@ export function importanceShader(nParameters: number): string {
     // logpdf of these given the expected values and the
     // outlier choices. Sum all that up and it's the score of
     // the model.
-    //float inlier_sigma = random_normal(seed, alpha_loc[6], alpha_scale[6]);
-    float inlier_sigma = 0.3;
+    float inlier_sigma = max(1e-6, random_normal(seed, alpha_loc[6], alpha_scale[6]));
+    //float inlier_sigma = 0.3;
     float log_w = 0.0;
     uint outlier_bits = 0u;
     vec3 polynomial_parameters = sample_poly(seed);

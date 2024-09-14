@@ -1,18 +1,28 @@
-import { type Model, type Normal } from "./model"
+import { XDistribution } from "./App"
 import { importanceShader } from "./shaders"
+import { TypedObject } from "./utils"
 import { WGL2Helper } from "./webgl"
 
 export interface ResultBatch {
   model: Float32Array
   weight: Float32Array
   p_outlier: Float32Array
+  inlier_sigma: Float32Array
   outlier: Uint32Array
+}
+
+interface Model {
+  model: Float32Array
+  outlier: number
+  log_weight: number
+  p_outlier: number
+  inlier_sigma: number
 }
 
 export interface ModelParameters {
   points: number[][]
-  coefficients: Normal[]
-  component_enable: Map<string, boolean>
+  coefficients: TypedObject<XDistribution>
+  component_enable: TypedObject<boolean>
 }
 
 export interface InferenceParameters {
@@ -56,6 +66,7 @@ export class GPGPU_Inference {
   private readonly floatsPerSeed: number
   private readonly seeds: Uint32Array
   private readonly weight: Float32Array
+  private readonly inlierSigma: Float32Array
   private readonly parameters: Float32Array
   private readonly p_outlier: Float32Array
   private readonly outlier: Uint32Array
@@ -114,6 +125,7 @@ export class GPGPU_Inference {
     this.parameters = new Float32Array(this.max_trials * nParameters)
     this.p_outlier = new Float32Array(this.max_trials)
     this.outlier = new Uint32Array(this.max_trials)
+    this.inlierSigma = new Float32Array(this.max_trials)
     this.seedBuf = makeBufferAndSetAttribute(this.seeds, this.seedLoc)
     this.floatsPerSeed = GPGPU_Inference.TF_BUFFER_NAMES.length
     this.bigArray = new Float32Array(this.max_trials * this.floatsPerSeed)
@@ -150,23 +162,23 @@ export class GPGPU_Inference {
 
   private sendParameters(parameters: ModelParameters) {
     const gl = this.wgl.gl
+
     // points is a list: [[x1, y1], ...]
     // to send to the GPU, we flatten it: [x1, y1, x2, ...]
-
     gl.uniform2fv(this.pointsLoc, parameters.points.flat())
 
     gl.uniform1fv(
       this.alphaLocLoc,
-      parameters.coefficients.map((c) => c.mu),
+      Object.values(parameters.coefficients).map((v) => v.get("mu")),
     )
     gl.uniform1fv(
       this.alphaScaleLoc,
-      parameters.coefficients.map((c) => c.sigma),
+      Object.values(parameters.coefficients).map((c) => c.get("sigma")),
     )
 
     let enableBits = 0
-    if (parameters.component_enable.get("polynomial")) enableBits |= 1
-    if (parameters.component_enable.get("periodic")) enableBits |= 2
+    if (parameters.component_enable.polynomial) enableBits |= 1
+    if (parameters.component_enable.periodic) enableBits |= 2
 
     gl.uniform1ui(this.componentEnableLoc, enableBits)
   }
@@ -230,6 +242,7 @@ export class GPGPU_Inference {
       this.weight[i] = a[p + this.nParameters]
       this.p_outlier[i] = a[p + this.nParameters + 1]
       this.outlier[i] = a[p + this.nParameters + 2]
+      this.inlierSigma[i] = a[p + this.nParameters + 3]
     }
     // TODO: unbind
 
@@ -238,6 +251,7 @@ export class GPGPU_Inference {
       model: this.parameters.subarray(0, N * this.floatsPerSeed),
       p_outlier: this.p_outlier.subarray(0, N),
       outlier: this.outlier.subarray(0, N),
+      inlier_sigma: this.inlierSigma.subarray(0, N),
       weight: this.weight.subarray(0, N),
     }
   }
@@ -285,6 +299,7 @@ export class GPGPU_Inference {
           ),
           outlier: results.outlier[targetIndex],
           p_outlier: results.p_outlier[targetIndex],
+          inlier_sigma: results.inlier_sigma[targetIndex],
           log_weight: results.weight[targetIndex],
         }
       } else {
