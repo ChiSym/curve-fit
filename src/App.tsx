@@ -222,30 +222,14 @@ export default function CurveFit() {
           </LiveCanvas>
         </div>
         <div id="inference-gauges">
-          <div>
-            <GaugeComponent
-              id="outlier-gauge"
-              className="inference-gauge"
-              value={outlier.get('mu')}
-              minValue={0.0}
-              maxValue={1.0}
-              labels={{valueLabel: {style: {textShadow: 'none', fill: '#000'},
-              formatTextValue: (v => Number(v).toFixed(2))}}}
-              arc={{subArcs: [{length: 0.33, color: '#0f0'}, {length: 0.33, color: '#ff0'}, {length: 0.33, color:'#f00'}]}} />
-              <span>p<sub>outlier</sub></span>
-              </div>
-          <div>
-            <GaugeComponent
-              id="inlier-sigma-gauge"
-              className="inference-gauge"
-              value={inlierSigma.get('mu')}
-              minValue={0.0}
-              maxValue={1.0}
-              labels={{valueLabel: {style: {textShadow: 'none', fill: '#000'},
-              formatTextValue: (v => Number(v).toFixed(2))}}}
-              arc={{subArcs: [{length: 0.33, color: '#0f0'}, {length: 0.33, color: '#ff0'}, {length: 0.33, color:'#f00'}]}} />
-              <span>&sigma;<sub>inlier</sub></span>
-              </div>
+          <StatGauge id="outlier-gauge" value={outlier.get("mu")} />
+          <span>
+            p<sub>outlier</sub>
+          </span>
+          <StatGauge id="inlier-sigma-gauge" value={inlierSigma.get("mu")} />
+          <span>
+            &sigma;<sub>inlier</sub>
+          </span>
         </div>
       </div>
       <InferenceUI
@@ -334,7 +318,6 @@ export default function CurveFit() {
           <br />
           IPS: <span id="ips">{(ips / 1e6).toFixed(2) + " M"}</span>
           <br />
-
         </div>
       </div>
       <div className="extra-components">
@@ -465,6 +448,31 @@ function ComponentParameter({
   })
 
   return <div className="value-group">{innerParams}</div>
+}
+
+function StatGauge({ id, value }: { id: string; value: number }) {
+  return (
+    <GaugeComponent
+      id={id}
+      className="inference-gauge"
+      value={value}
+      minValue={0.0}
+      maxValue={1.0}
+      labels={{
+        valueLabel: {
+          style: { textShadow: "none", fill: "#888" },
+          formatTextValue: (v) => Number(v).toFixed(2),
+        },
+      }}
+      arc={{
+        subArcs: [
+          { length: 0.33, color: "#0f0" },
+          { length: 0.33, color: "#ff0" },
+          { length: 0.33, color: "#f00" },
+        ],
+      }}
+    />
+  )
 }
 
 function InferenceUI({
