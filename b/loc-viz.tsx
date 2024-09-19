@@ -1,20 +1,21 @@
 import { LC, PropsWithChildren, useOne, useState } from "@use-gpu/live"
-import { Line, Plot, Point, Transform } from "@use-gpu/plot"
+import { Arrow, Line, Plot, Point, Transform } from "@use-gpu/plot"
 import { HTML } from "@use-gpu/react"
 import { AutoCanvas, WebGPU } from "@use-gpu/webgpu"
-import { FlatCamera, PanControls, Pass, useMouse, useWheel } from "@use-gpu/workbench"
+import { Data, FlatCamera, Pass, PointLayer, useMouse, useWheel } from "@use-gpu/workbench"
 import { FALLBACK_MESSAGE } from "../src/fallback"
 import data from "./example_20_program.json"
 
 type LocalizationViewProps = {
   canvas: HTMLCanvasElement
+  fov: number
+  nRays: number
 }
 
 export class Localization {
   walls_w: number
   walls_h: number
   walls: number[][]
-  angles: number[]
 
   constructor() {
     this.walls = data.wall_verts
@@ -31,18 +32,11 @@ export class Localization {
     this.walls_w = bbox[1][0] - bbox[0][0]
     this.walls_h = bbox[1][1] - bbox[0][1]
 
-    const fov = (2 * Math.PI) / 3
-    const Nrays = 15
-    this.angles = new Array(Nrays)
-    for (let i = 0; i < Nrays; ++i)
-      this.angles[i] = (i / (Nrays - 1)) * fov - fov / 2
-
-    console.log(this.angles)
   }
 
-  sensor_ps(p: number[], hd: number): number[][] {
+  sensor_ps(angles: number[], p: number[], hd: number): number[][] {
     const ps = []
-    for (const a of this.angles) {
+    for (const a of angles) {
       const a1 = a + hd
       const dp = [Math.cos(a1), Math.sin(a1)]
       const q = intersection_point(p, dp, this.walls)
@@ -54,7 +48,7 @@ export class Localization {
   View: LC<LocalizationViewProps> = (
     props: PropsWithChildren<LocalizationViewProps>,
   ) => {
-    const { canvas } = props
+    const { canvas, fov, nRays } = props
     return (
       <WebGPU
         fallback={(error: Error) => <HTML>{FALLBACK_MESSAGE(error)}</HTML>}
@@ -66,7 +60,7 @@ export class Localization {
         >
           <FlatCamera>
             <Pass>
-              <this.Viz canvas={canvas} />
+              <this.Viz {...props}/>
             </Pass>
           </FlatCamera>
         </AutoCanvas>
@@ -77,11 +71,12 @@ export class Localization {
   Viz: LC<LocalizationViewProps> = (
     props: PropsWithChildren<LocalizationViewProps>,
   ) => {
-    const { canvas } = props
+    const { canvas, fov, nRays } = props
     const { mouse } = useMouse()
     const { wheel } = useWheel()
 
     const [xy, setXY] = useState<number[]>([0, 0])
+    const [target, setTarget] = useState({xy: [0, 0], hd: 0})
     const [hd, setHd] = useState<number>(0)
 
     const box = canvas.parentElement!.getClientRects()[0]
@@ -91,6 +86,11 @@ export class Localization {
     const scale_y = (-(1 - 2 * inset) * box.height) / this.walls_h
     const t_x = inset * box.width
     const t_y = (1 - inset) * box.height
+
+    const angles = new Array(nRays)
+    const fov_r = fov / 180 * Math.PI
+    for (let i = 0; i < nRays; ++i)
+      angles[i] = (i / (nRays - 1)) * fov_r - fov_r / 2
 
     const matrix = [
       scale_x,
@@ -112,24 +112,25 @@ export class Localization {
     ]
 
     useOne(() => {
-      const { x, y, /*_buttons, */ stopped } = mouse
-      if (stopped) return
+      const { x, y, buttons } = mouse
 
       // these coordinates are in window coordinates so we
       // need the matrix which transforms them to world
       // coordinates
       const x1 = (x - t_x) / scale_x
       const y1 = (y - t_y) / scale_y
-      console.log(x1, y1)
+      if (buttons.left) {
+        setTarget({xy: [x1, y1], hd: hd})
+      }
       setXY([x1, y1])
     }, mouse)
 
     useOne(() => {
-      const { moveY } = wheel
-      setHd(hd => hd + moveY/50)
+      setHd(hd => (hd + wheel.moveY/50) % (2 * Math.PI))
     }, wheel)
 
-    const sps = this.sensor_ps(xy, hd)
+    const sps = this.sensor_ps(angles, xy, hd)
+    const target_p2 = [target.xy[0] + Math.cos(target.hd), target.xy[1] + Math.sin(target.hd)]
 
     return (
       <Plot>
@@ -140,7 +141,7 @@ export class Localization {
           (-(1 - 2 * inset) * box.height) / this.walls_h,
         ]} */ matrix={matrix}
         >
-          <Line positions={this.walls} />
+          <Line positions={this.walls}></Line>
           <Point color="#0f0" size={15} position={[0, 0]}></Point>
           <Point
             color="#00f"
@@ -148,25 +149,13 @@ export class Localization {
             position={[this.walls_w, this.walls_h]}
           ></Point>
           <Point color="#880" size={4} positions={sps}></Point>
+          <Arrow size={5} end positions={[target.xy, target_p2]}></Arrow>
           <Line positions={sps.map((q) => [xy, q])}></Line>
         </Transform>
       </Plot>
     )
   }
 }
-
-// Wrap this in its own component to avoid JSX trashing of the view
-type CameraProps = PropsWithChildren<object>
-const Camera: LC<CameraProps> = (props: CameraProps) => (
-  /* 2D pan controls + flat view */
-  <PanControls>
-    {(x, y, zoom) => (
-      <FlatCamera x={x} y={y} zoom={zoom}>
-        {props.children}
-      </FlatCamera>
-    )}
-  </PanControls>
-)
 
 const PARALLEL_TOL = 1e-10
 function solve_lines(p: number[], dp: number[], q: number[], dq: number[]) {
