@@ -2,9 +2,21 @@ import { LC, PropsWithChildren, useOne, useState } from "@use-gpu/live"
 import { Arrow, Line, Plot, Point, Transform } from "@use-gpu/plot"
 import { HTML } from "@use-gpu/react"
 import { AutoCanvas, WebGPU } from "@use-gpu/webgpu"
-import { Data, FlatCamera, Pass, PointLayer, useMouse, useWheel } from "@use-gpu/workbench"
+import {
+  Data,
+  DataShader,
+  FlatCamera,
+  getLineSegments,
+  Kernel,
+  LineLayer,
+  Pass,
+  PointLayer,
+  useMouse,
+  useWheel,
+} from "@use-gpu/workbench"
 import { FALLBACK_MESSAGE } from "../src/fallback"
 import data from "./example_20_program.json"
+import { LambdaSource, wgsl } from "@use-gpu/shader/wgsl"
 
 type LocalizationViewProps = {
   canvas: HTMLCanvasElement
@@ -31,7 +43,6 @@ export class Localization {
     })
     this.walls_w = bbox[1][0] - bbox[0][0]
     this.walls_h = bbox[1][1] - bbox[0][1]
-
   }
 
   sensor_ps(angles: number[], p: number[], hd: number): number[][] {
@@ -48,7 +59,7 @@ export class Localization {
   View: LC<LocalizationViewProps> = (
     props: PropsWithChildren<LocalizationViewProps>,
   ) => {
-    const { canvas, fov, nRays } = props
+    const { canvas } = props
     return (
       <WebGPU
         fallback={(error: Error) => <HTML>{FALLBACK_MESSAGE(error)}</HTML>}
@@ -60,7 +71,7 @@ export class Localization {
         >
           <FlatCamera>
             <Pass>
-              <this.Viz {...props}/>
+              <this.Viz {...props} />
             </Pass>
           </FlatCamera>
         </AutoCanvas>
@@ -76,7 +87,7 @@ export class Localization {
     const { wheel } = useWheel()
 
     const [xy, setXY] = useState<number[]>([0, 0])
-    const [target, setTarget] = useState({xy: [0, 0], hd: 0})
+    const [target, setTarget] = useState({ xy: [0, 0], hd: 0 })
     const [hd, setHd] = useState<number>(0)
 
     const box = canvas.parentElement!.getClientRects()[0]
@@ -88,7 +99,7 @@ export class Localization {
     const t_y = (1 - inset) * box.height
 
     const angles = new Array(nRays)
-    const fov_r = fov / 180 * Math.PI
+    const fov_r = (fov / 180) * Math.PI
     for (let i = 0; i < nRays; ++i)
       angles[i] = (i / (nRays - 1)) * fov_r - fov_r / 2
 
@@ -120,17 +131,31 @@ export class Localization {
       const x1 = (x - t_x) / scale_x
       const y1 = (y - t_y) / scale_y
       if (buttons.left) {
-        setTarget({xy: [x1, y1], hd: hd})
+        setTarget({ xy: [x1, y1], hd: hd })
       }
       setXY([x1, y1])
     }, mouse)
 
     useOne(() => {
-      setHd(hd => (hd + wheel.moveY/50) % (2 * Math.PI))
+      setHd((hd) => (hd + wheel.moveY / 50) % (2 * Math.PI))
     }, wheel)
 
     const sps = this.sensor_ps(angles, xy, hd)
-    const target_p2 = [target.xy[0] + Math.cos(target.hd), target.xy[1] + Math.sin(target.hd)]
+    const target_p2 = [
+      target.xy[0] + Math.cos(target.hd),
+      target.xy[1] + Math.sin(target.hd),
+    ]
+
+    const myShader = wgsl`
+    @link fn getData(i: u32) -> vec2<f32>;
+
+    fn main(i: u32) -> vec2<f32> {
+      let s1 = getData(i);
+      let s2 = getData(i+1);
+      //return vec3<f32>((s1.x + s2.x) / 2, (s1.y + s2.y) / 2, 0);
+      return vec2<f32>((s1.x + s2.x)/2, (s1.y + s2.y)/2);
+      //return vec<f32>(max(0.0, sample), max(0.0, sample * .2) + max(0.0, -sample * .3), max(0.0, -sample), 1.0);
+    }`;
 
     return (
       <Plot>
@@ -141,7 +166,37 @@ export class Localization {
           (-(1 - 2 * inset) * box.height) / this.walls_h,
         ]} */ matrix={matrix}
         >
-          <Line positions={this.walls}></Line>
+          <Data
+            schema={{
+              positions: "array<vec2<f32>>",
+              colors: "vec4<f32>",
+              widths: "f32",
+              sizes: "f32",
+            }}
+            segments={getLineSegments}
+            data={[
+              {
+                positions: data.wall_verts,
+                colors: [0.7, 0, 0, 1],
+                widths: 2,
+                sizes: 100,
+              },
+            ]}
+          >
+            {(d) => { console.log(d); return (
+              <>
+                <LineLayer segments={d.segments} positions={d.positions} colors={d.colors} widths={d.widths} instances={d.instances}></LineLayer>
+                <DataShader args={[xy]} shader={myShader} source={d.positions}>
+                  {(midpoints: LambdaSource) => {
+                    console.log(midpoints)
+                    return <PointLayer positions={midpoints} size={d.size} color={[0,0,1,1]}></PointLayer>
+                  }}
+                </DataShader>
+              </>
+            )}}
+          </Data>
+
+          {/* <Line positions={this.walls}></Line> */}
           <Point color="#0f0" size={15} position={[0, 0]}></Point>
           <Point
             color="#00f"
@@ -191,21 +246,3 @@ function intersection_point(p: number[], dp: number[], walls: number[][]) {
   }
   return Number.isFinite(min_d) && [p[0] + min_d * dp[0], p[1] + min_d * dp[1]]
 }
-
-// def distance(p, seg):
-//     """
-//     Computes the distance from a pose to a segment, considering the pose's direction.
-
-//     Args:
-//     - p: The Pose object.
-//     - seg: The Segment object.
-
-//     Returns:
-//     - float: The distance to the segment. Returns infinity if no valid intersection is found.
-//     """
-//     a = solve_lines(p.p, p.dp(), seg[0], seg[1] - seg[0])
-//     return jnp.where(
-//         (a[0] >= 0.0) & (a[1] >= 0.0) & (a[1] <= 1.0),
-//         a[0],
-//         jnp.inf,
-//     )
