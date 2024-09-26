@@ -1,11 +1,27 @@
 import { createRoot } from "react-dom/client"
+import { ErrorBoundary, FallbackProps } from "react-error-boundary"
 import "./style.css"
 
 import App from "./App"
-import { StrictMode } from "react"
-createRoot(document.getElementById("root")!).render(
+import { ReactNode, StrictMode } from "react"
+createRoot(document.getElementById("root")!,
+{
+  onRecoverableError: (error, errorInfo) => {
+    console.error('onRecoverableError', error, errorInfo)
+  }
+}).render(
   <StrictMode>
     <h1>SIR Curve Fit</h1>
-    <App />
+    <ErrorBoundary fallbackRender={fallbackRender}>
+      <App />
+    </ErrorBoundary>
   </StrictMode>,
 )
+
+function fallbackRender(fb: FallbackProps): ReactNode {
+  return (
+    <div className={"log-error"}>
+      <pre>{fb.error.message}</pre>
+    </div>
+  )
+}

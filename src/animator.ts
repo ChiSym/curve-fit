@@ -17,7 +17,7 @@ function log(level: string, message: unknown): void {
   d.className = "log-" + level
   const t = document.createTextNode(message + "")
   d.appendChild(t)
-  document.querySelector("#app")?.appendChild(d)
+  document.querySelector("#root")?.appendChild(d)
 }
 
 export interface InferenceReport {

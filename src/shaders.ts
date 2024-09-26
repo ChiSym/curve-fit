@@ -66,6 +66,23 @@ float logpdf_uniform(float v, float low, float high) {
 }
 `
 
+const logpdfFlip = /* glsl */ `
+// recovered from de-compiled JAX
+float logpdf_flip(float v, float p) {
+  float g = -p;
+  float h = log(g + 1.0);  // log1p
+  float i = log(p);
+  float k = 1.0 - v;
+  bool l = k == 0.0;
+  float n = h * k;
+  float o = l ? 0.0 : n;
+  bool q = i == 0.0;
+  float r = i * v;
+  float s = q ? 0.0 : r;
+  return o + s;
+}
+`
+
 const flip = /* glsl */ `
 bool flip(inout uvec3 seed, float prob) {
   if (prob >= 1.0) return true;
@@ -144,6 +161,7 @@ const stdlib = `
   ${lgamma}
   ${randomUniform}
   ${logpdfUniform}
+  ${logpdfFlip}
   ${flip}
   ${erfc}
   ${invErfc}
@@ -247,12 +265,13 @@ export function importanceShader(nParameters: number): string {
       bool outlier = flip(seed, p_outlier);
       outlier_bits = outlier_bits | (uint(outlier) << i);
       float y_model = evaluate_model(polynomial_parameters, periodic_parameters, points[i].x);
-      log_w += logpdf_normal(points[i].y, y_model, outlier ? 3.0 : inlier_sigma);
-      //if (!outlier) {
-      //  w += logpdf_normal(y_observed, y_model, inlier_sigma);
-      //}
-      // w += logpdf_normal(inlier_sigma, alpha_loc[6], alpha_scale[6]);
+      if (outlier) {
+        log_w += logpdf_uniform(y_model, -1.0, 1.0);
+      } else {
+        log_w += logpdf_normal(points[i].y, y_model, inlier_sigma);
+      }
     }
+    log_w += logpdf_uniform(p_outlier, 0.0, 1.0);  // TODO: #define
     out_0 = polynomial_parameters[0];
     out_1 = polynomial_parameters[1];
     out_2 = polynomial_parameters[2];
