@@ -143,24 +143,98 @@ def update_coefficient(tr: genjax.Trace, *, scale=0.01, key):
     # print(f'our_w: {our_w}')
     return tr_u, w_u, our_w
 
-def update_score(tr, cm):
-    pass
-
-def test_update(key):
+def test_update_coefficients(key):
     k1, k2 = jax.random.split(key)
     #tr, w = importance_sample(cf, 1000, k1)
+    # we'd like to switch back to the one from curve_fit but it's jitted (GEN-636)
     cmap = C['ys', jnp.arange(4), 'y', 'value'].set(ys)
     tr, w = cf.gf.importance(k1, cmap, (xs,))
     #tr, w = importance_sample(cf, 1, k1)
     tr_u, w_u, our_w = update_coefficient(tr, key=k2)
     return tr, tr_u, w_u, our_w
 # %%
-tr0, tr_u, w_u, our_w = test_update(jax.random.PRNGKey(113))
+tr0, tr_u, w_u, our_w = test_update_coefficients(jax.random.PRNGKey(113))
 w_u, our_w, w_u - our_w
 # %%
+def update_inlier_sigma(tr, *, scale=0.01, key):
+    choices = tr.get_choices()
+    k1, k2 = jax.random.split(key)
+    old_inlier_sigma = choices['sigma_inlier']
+    delta = scale * jax.random.normal(k1, old_inlier_sigma.shape)
+    new_inlier_sigma = old_inlier_sigma + delta
+    our_w = logpdf_uniform(new_inlier_sigma, *sigma_inlier.args) - logpdf_uniform(old_inlier_sigma, *sigma_inlier.args)
+    outliers = choices['ys',...,'outlier']
+    def y_score(y, outlier, tr_y):
+        return jax.lax.select(
+            outlier,
+            0.0, # the target ys don't change, and that's what this part of the score is based
+            logpdf_normal(tr_y, y, new_inlier_sigma) - logpdf_normal(tr_y, y, old_inlier_sigma)
+        )
+    fn = tr.subtraces[3].inner.get_args()[1]
+    tr_ys = fn(xs)[:,0]
+    our_w += jnp.sum(jax.vmap(y_score)(ys, outliers, tr_ys))
+
+    #print('ol', outliers)
+    cm = C['sigma_inlier'].set(new_inlier_sigma)
+    tr_u, w_u, _, _ = tr.update(k2, cm)
+    return tr_u, w_u, our_w
+
+def test_update_inlier_sigma(key):
+    k1, k2 = jax.random.split(key)
+    # GEN-636 stops us from using cf.importance_sample
+    cmap = C['ys', jnp.arange(4), 'y', 'value'].set(ys)
+    tr, w = cf.gf.importance(k1, cmap, (xs,))
+    tr_u, w_u, our_w = update_inlier_sigma(tr, key=k2)
+    return tr, tr_u, w_u, our_w
+
+# %%
+tr, tr_u, w_u, our_w = test_update_inlier_sigma(jax.random.PRNGKey(314159))
+# %%
+def update_p_outlier(tr, *, scale=0.01, key):
+    choices = tr.get_choices()
+    k1, k2 = jax.random.split(key)
+    outlier_states = choices['ys',...,'outlier']
+    n_outliers = jnp.sum(outlier_states)
+    old_p_outlier = choices['p_outlier']
+    new_p_outlier = jax.random.beta(
+        k1,
+        1.0 + n_outliers,
+        1 + len(outlier_states) + n_outliers,
+    )
+    cm = C['p_outlier'].set(new_p_outlier)
+    tr_u, w_u, _, _ = tr.update(k2, cm)
+    # changing p_outlier will change the weights of the outliers
+    our_w = jnp.sum(jnp.array([
+        logpdf_flip(o, new_p_outlier) - logpdf_flip(o, old_p_outlier)
+        for o in outlier_states
+    ]))
+    return tr_u, w_u, our_w
+
+def test_update_p_outlier(key):
+    k1, k2 = jax.random.split(key)
+    cmap = C['ys', jnp.arange(4), 'y', 'value'].set(ys)
+    tr, w = cf.gf.importance(k1, cmap, (xs,))
+    tr_u, w_u, our_w = update_p_outlier(tr, key=k2)
+
+    return tr, tr_u, w_u, our_w
+
+# %%
+tr, tr_u, w_u, our_w = test_update_p_outlier(jax.random.PRNGKey(314159))
+# %%
+w_u, our_w
+# %%
+tr.subtraces[3].inner.subtraces[0], tr_u.subtraces[3].inner.subtraces[0]
+# %%
+
 def test_update_batch(k):
-    _, _, w_u, our_w = test_update(k)
-    return w_u - our_w
+    k1, k2, k3 = jax.random.split(k, 3)
+    _, _, w_u, our_w = test_update_coefficients(k1)
+    _, _, w_u1, our_w1 = test_update_inlier_sigma(k2)
+    _, _, w_u2, our_w2 = test_update_p_outlier(k3)
+    # this needs to consider the case of -inf, -inf (the difference is Nan)
+    # or nan, nan (the difference is also nan), but the update computation
+    # has succeeded.
+    return jnp.array([w_u - our_w, w_u1 - our_w1, w_u2 - our_w2])
 
 jax.vmap(test_update_batch)(jax.random.split(jax.random.PRNGKey(314159) ,100))
 # %%
