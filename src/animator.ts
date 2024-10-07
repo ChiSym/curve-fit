@@ -1,10 +1,9 @@
-import { XDistribution } from "./App.tsx"
 import {
   GPGPU_Inference,
   InferenceParameters,
   InferenceResult,
 } from "./gpgpu.ts"
-import { RunningStats } from "./stats.ts"
+import { RunningStats, XDistribution } from "./stats.ts"
 import { TypedObject } from "./utils"
 
 function log(level: string, message: unknown): void {
@@ -26,6 +25,7 @@ export interface InferenceReport {
   pOutlierStats: RunningStats
   inlierSigmaStats: RunningStats
   autoSIR: boolean
+  autoDrift: boolean
   inferenceResult: InferenceResult
 }
 
@@ -38,10 +38,12 @@ export class Animator {
   private points: number[][] = []
   private pause: boolean = false
   private autoSIR: boolean = false
+  private autoDrift: boolean = false
   private componentEnable: TypedObject<boolean> = {}
   private frameCount = 0
   private totalFailedSamples = 0
   private t0: DOMHighResTimeStamp = performance.now()
+  private result: InferenceResult
 
   constructor(
     modelParameters: TypedObject<XDistribution>,
@@ -58,6 +60,11 @@ export class Animator {
       acc[k] = new RunningStats()
       return acc
     }, {} as TypedObject<RunningStats>)
+    this.result = {
+      selectedModels: [],
+      ips: 0,
+      failedSamples: 0,
+    }
   }
 
   public setInferenceParameters(ps: InferenceParameters) {
@@ -84,6 +91,11 @@ export class Animator {
     this.autoSIR = autoSIR
   }
 
+  public setAutoDrift(autoDrift: boolean) {
+    console.log(`auto drfit ${autoDrift}`)
+    this.autoDrift = autoDrift
+  }
+
   public setComponentEnable(componentEnable: TypedObject<boolean>) {
     this.componentEnable = { ...componentEnable }
   }
@@ -95,6 +107,7 @@ export class Animator {
   }
 
   public Reset() {
+    this.result.selectedModels = []
     this.totalFailedSamples = 0
     this.frameCount = 0
     this.t0 = performance.now()
@@ -114,25 +127,40 @@ export class Animator {
     this.t0 = performance.now() // TODO: need to reset this from time to time along with frame count
 
     const frame = (t: DOMHighResTimeStamp) => {
-      let result = undefined
       try {
         if (!this.pause) {
-          result = gpu.inference(
-            {
-              points: this.points,
-              coefficients: this.modelParameters,
-              component_enable: this.componentEnable,
-            },
-            this.inferenceParameters,
-          )
+          if (this.autoDrift) {
+            if (!this.result.selectedModels.length) {
+              this.result = gpu.inference(
+                {
+                  points: this.points,
+                  coefficients: this.modelParameters,
+                  component_enable: this.componentEnable,
+                },
+                this.inferenceParameters,
+              )
+            }
+            this.result.selectedModels.forEach((m) =>
+              m.drift_coefficients(0.001, this.modelParameters, this.points),
+            )
+          } else {
+            this.result = gpu.inference(
+              {
+                points: this.points,
+                coefficients: this.modelParameters,
+                component_enable: this.componentEnable,
+              },
+              this.inferenceParameters,
+            )
+          }
         }
-        if (result) {
-          this.totalFailedSamples += result.failedSamples
+        if (this.result) {
+          this.totalFailedSamples += this.result.failedSamples
 
           const pOutlierStats = new RunningStats()
           const inlierSigmaStats = new RunningStats()
 
-          for (const m of result.selectedModels) {
+          for (const m of this.result.selectedModels) {
             let i = 0
             for (const v of Object.values(this.stats)) {
               v.observe(m.model[i++])
@@ -146,9 +174,10 @@ export class Animator {
             totalFailedSamples: this.totalFailedSamples,
             fps: fps,
             autoSIR: this.autoSIR,
+            autoDrift: this.autoDrift,
             pOutlierStats: pOutlierStats,
             inlierSigmaStats: inlierSigmaStats,
-            inferenceResult: result,
+            inferenceResult: this.result, // TODO: make a getter
           }
           this.inferenceReportCallback(info)
           // emptyPosterior.innerText = totalFailedSamples.toString()

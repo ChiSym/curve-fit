@@ -4,64 +4,16 @@ import { useCallback, useState, useRef, ChangeEvent, useEffect } from "react"
 import throttle from "lodash.throttle"
 import katex from "katex"
 import { InferenceParameters, InferenceResult } from "./gpgpu.ts"
-import { RunningStats } from "./stats.ts"
+import { Normal, RunningStats, XDistribution } from "./stats.ts"
 import { TypedObject } from "./utils"
 import { Component } from "./live.tsx"
 import { LiveCanvas } from "@use-gpu/react"
 import GaugeComponent from "react-gauge-component"
 
-class DistributionShape {
-  public readonly name: string
-  public readonly parameterName: string[]
-  constructor(name: string, parameterName: string[]) {
-    this.name = name
-    this.parameterName = parameterName
-  }
-}
-
-const NormalDistributionShape = new DistributionShape("normal", ["mu", "sigma"])
-
 // Selector values for the number of importance samples to draw per frame
 const Ns = [100, 1000, 5000, 10000, 50000, 100000]
 const maxN = Math.max(...Ns)
 
-export class XDistribution {
-  public readonly shape: DistributionShape
-  public readonly parameters: Map<string, number>
-
-  constructor(shape: DistributionShape, parameters: number[]) {
-    this.shape = shape
-    if (parameters.length != this.shape.parameterName.length) {
-      throw new Error(
-        `incorrect number of paramters for ${this.shape.name} distribution: ${parameters.length} != ${this.shape.parameterName.length}`,
-      )
-    }
-    this.parameters = new Map()
-    for (let i = 0; i < parameters.length; ++i) {
-      this.parameters.set(this.shape.parameterName[i], parameters[i])
-    }
-  }
-  public get(pName: string): number {
-    return this.parameters.get(pName)!
-  }
-  public set(pName: string, value: number) {
-    return this.parameters.set(pName, value)
-  }
-  public assoc(pName: string, value: number) {
-    const ret = this.clone()
-    ret.set(pName, value)
-    return ret
-  }
-  public clone(): XDistribution {
-    return new XDistribution(this.shape, Array.from(this.parameters.values()))
-  }
-  public getParameterNames(): string[] {
-    return this.shape.parameterName
-  }
-}
-
-export const Normal = (mu: number, sigma: number) =>
-  new XDistribution(NormalDistributionShape, [mu, sigma])
 
 export const modelParams: TypedObject<XDistribution> = {
   a_0: Normal(0, 2),
@@ -107,6 +59,7 @@ export default function CurveFit() {
   const [fps, setFps] = useState(0.0)
   const [visualizeInlierSigma, setVisualizeInlierSigma] = useState(false)
   const [autoSIR, setAutoSIR] = useState(false)
+  const [autoDrift, setAutoDrift] = useState(false)
 
   function modelChange(k1: string, k2: string, v: number) {
     setModelState({ ...modelState, [k1]: modelState[k1]!.assoc(k2, v) })
@@ -151,6 +104,8 @@ export default function CurveFit() {
     setStats(data.pOutlierStats, data.inlierSigmaStats)
     if (data.autoSIR) {
       SIR_Update()
+    } else if (data.autoDrift) {
+      Drift()
     } else {
       throttledSetPosteriorState()
     }
@@ -186,6 +141,14 @@ export default function CurveFit() {
     setPosteriorState(modelParams)
     animatorRef.current?.setModelParameters(modelParams)
     animatorRef.current?.Reset()
+  }
+
+  function Drift() {
+    inferenceResult.selectedModels.forEach(m => {
+      m.drift_coefficients(0.01, modelParams, points.points)
+      m.drift_sigma_inlier(0.01, modelParams, points.points)
+      setInferenceResult({...inferenceResult})
+    })
   }
 
   function canvasClick(event: React.MouseEvent<HTMLElement>) {
@@ -362,6 +325,19 @@ export default function CurveFit() {
           />
           Auto-SIR
         </label>
+        <label>
+          <input
+            id="auto-Drift"
+            type="checkbox"
+            checked={autoDrift}
+            onChange={(e) => {
+              const b: boolean = e.target.checked
+              setAutoDrift(b)
+              animatorRef.current?.setAutoDrift(b)
+            }}
+          />
+          Auto-Drift
+        </label>
         &nbsp;&nbsp;
         <label>
           <input
@@ -378,6 +354,9 @@ export default function CurveFit() {
         </button>
         <button id="reset-priors" type="button" onClick={Reset}>
           Reset
+        </button>
+        <button id="drift" type="button" onClick={Drift}>
+          Drift
         </button>
       </div>
     </>
