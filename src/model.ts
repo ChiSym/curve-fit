@@ -1,6 +1,5 @@
 import {
   logpdf_normal,
-  logpdf_uniform,
   sample_normal,
   XDistribution,
 } from "./stats"
@@ -33,6 +32,46 @@ export class Model {
     const y_poly = c[0] + x * c[1] + x * x * c[2]
     const y_periodic = c[4] + Math.sin(c[5] + c[3] * x)
     return y_poly + y_periodic
+  }
+
+  public drift_coefficient(
+    i: number,
+    scale: number,
+    coefficients: TypedObject<XDistribution>,
+    points: number[][]
+  ) {
+    const drifted = this.model[i] + scale * sample_normal()
+    const old_ys = points.map(([x]) => this.fn(x))
+    const drifted_cs = this.model.slice()
+    drifted_cs[i] = drifted
+    const new_ys = points.map(([x]) => Model.fn_from_coefficients(drifted_cs, x))
+    let log_w = 0.0
+    // consider the change in logpdf of the coefficient itself
+    // TODO move logpdf into XDistribution
+    const ci = coefficients[i]
+    const mu = ci.get('mu')
+    const sigma = ci.get('sigma')
+    log_w += logpdf_normal(drifted, mu, sigma) - logpdf_normal(this.model[i], mu, sigma)
+    // consider the updated likeliehood of the y values chosen by the
+    // updated model
+    const sigma_inlier = coefficients.inlier.get("mu")
+    for (let i = 0; i < points.length; ++i) {
+      const inlier = (this.outlier & (1 << i)) == 0
+      const y_i = points[i][1]
+      if (inlier) {
+        log_w +=
+          logpdf_normal(new_ys[i], y_i, sigma_inlier) -
+          logpdf_normal(old_ys[i], y_i, sigma_inlier)
+      }
+    }
+    const choice = Math.random()
+    if (choice <= Math.exp(log_w)) {
+      // accept
+      //console.log(`${choice} ${Math.exp(log_w)} accepted`)
+      this.model[i] = drifted
+    } else {
+      //console.log(`${choice} ${Math.exp(log_w)} rejected`)
+    }
   }
 
   public drift_coefficients(
@@ -70,15 +109,15 @@ export class Model {
           logpdf_normal(old_ys[i], y_i, sigma_inlier)
       }
     }
-    console.log(`cs ${log_w_cs} ys ${log_w_ys}`)
+    //console.log(`cs ${log_w_cs} ys ${log_w_ys}`)
     const log_w = log_w_cs + log_w_ys
     const choice = Math.random()
     if (choice <= Math.exp(log_w)) {
       // accept
-      console.log(`${choice} ${Math.exp(log_w)} accepted`)
+      //console.log(`${choice} ${Math.exp(log_w)} accepted`)
       this.model.set(drifted)
     } else {
-      console.log(`${choice} ${Math.exp(log_w)} rejected`)
+      //console.log(`${choice} ${Math.exp(log_w)} rejected`)
     }
   }
 
@@ -91,7 +130,7 @@ export class Model {
     const sigma_sigma = coefficients.inlier.get("sigma")
     const delta = scale * sample_normal()
     const new_inlier_sigma = old_inlier_sigma + delta
-    let log_w = logpdf_uniform(new_inlier_sigma, old_inlier_sigma, sigma_sigma)
+    let log_w = logpdf_normal(new_inlier_sigma, old_inlier_sigma, sigma_sigma)
     // now compute the likelihoods of the inlier y's under this sigma
     const ys = points.map(([x]) => this.fn(x))
     for (let i = 0; i < ys.length; ++i) {
@@ -101,13 +140,18 @@ export class Model {
       }
     }
 
+    console.log(`sigma_inlier update log_w ${log_w}`)
     const choice = Math.random()
     if (choice <= Math.exp(log_w)) {
       // accept
-      console.log(
-        `accepted inlier_sigma update ${this.inlier_sigma} -> ${new_inlier_sigma}`,
-      )
+      // console.log(
+      //   `accepted inlier_sigma update ${this.inlier_sigma} -> ${new_inlier_sigma}`,
+      // )
       this.inlier_sigma = new_inlier_sigma
+    } else {
+      console.log(
+        `rejected inlier_sigma update ${this.inlier_sigma} -> ${new_inlier_sigma}`,
+      )
     }
   }
 }

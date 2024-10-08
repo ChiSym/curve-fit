@@ -145,8 +145,8 @@ export default function CurveFit() {
 
   function Drift() {
     inferenceResult.selectedModels.forEach(m => {
-      m.drift_coefficients(0.01, modelParams, points.points)
-      m.drift_sigma_inlier(0.01, modelParams, points.points)
+      for (let i = 0; i < 7; ++i) m.drift_coefficient(i, 1, modelParams, points.points)
+      //m.drift_sigma_inlier(0.1, modelParams, points.points)
       setInferenceResult({...inferenceResult})
     })
   }
