@@ -106,6 +106,14 @@ export class Animator {
     )
   }
 
+  public Drift() {
+    this.result.selectedModels.forEach((m) =>
+      Object.values(this.modelParameters).forEach((p, i) =>
+        m.drift_coefficient(i, 0.002, p, this.modelParameters.inlier.get('mu'), this.points)
+      )
+    )
+  }
+
   public Reset() {
     this.result.selectedModels = []
     this.totalFailedSamples = 0
@@ -140,9 +148,7 @@ export class Animator {
                 this.inferenceParameters,
               )
             }
-            this.result.selectedModels.forEach((m) =>
-              m.drift_coefficients(0.001, this.modelParameters, this.points),
-            )
+            this.Drift()
           } else {
             this.result = gpu.inference(
               {

@@ -37,7 +37,8 @@ export class Model {
   public drift_coefficient(
     i: number,
     scale: number,
-    coefficients: TypedObject<XDistribution>,
+    distribution: XDistribution,
+    sigma_inlier: number,
     points: number[][]
   ) {
     const drifted = this.model[i] + scale * sample_normal()
@@ -48,13 +49,11 @@ export class Model {
     let log_w = 0.0
     // consider the change in logpdf of the coefficient itself
     // TODO move logpdf into XDistribution
-    const ci = coefficients[i]
-    const mu = ci.get('mu')
-    const sigma = ci.get('sigma')
+    const mu = distribution.get('mu')
+    const sigma = distribution.get('sigma')
     log_w += logpdf_normal(drifted, mu, sigma) - logpdf_normal(this.model[i], mu, sigma)
     // consider the updated likeliehood of the y values chosen by the
     // updated model
-    const sigma_inlier = coefficients.inlier.get("mu")
     for (let i = 0; i < points.length; ++i) {
       const inlier = (this.outlier & (1 << i)) == 0
       const y_i = points[i][1]
@@ -65,12 +64,13 @@ export class Model {
       }
     }
     const choice = Math.random()
-    if (choice <= Math.exp(log_w)) {
+    if (choice < Math.exp(log_w)) {
       // accept
       //console.log(`${choice} ${Math.exp(log_w)} accepted`)
+      console.log(`update [${i}] ${this.model[i]} -> ${drifted} ${Math.exp(log_w)} ACCEPT`)
       this.model[i] = drifted
     } else {
-      //console.log(`${choice} ${Math.exp(log_w)} rejected`)
+      console.log(`update [${i}] ${this.model[i]} -> ${drifted} ${Math.exp(log_w)} REJECT`)
     }
   }
 

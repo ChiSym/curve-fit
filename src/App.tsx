@@ -117,7 +117,7 @@ export default function CurveFit() {
       modelParams,
       defaultInferenceParameters,
       maxN,
-      setter,
+      setter
     ))
     a.setInferenceParameters(inferenceParameters)
     a.setModelParameters(modelParams)
@@ -144,11 +144,7 @@ export default function CurveFit() {
   }
 
   function Drift() {
-    inferenceResult.selectedModels.forEach(m => {
-      for (let i = 0; i < 7; ++i) m.drift_coefficient(i, 1, modelParams, points.points)
-      //m.drift_sigma_inlier(0.1, modelParams, points.points)
-      setInferenceResult({...inferenceResult})
-    })
+    animatorRef.current?.Drift()
   }
 
   function canvasClick(event: React.MouseEvent<HTMLElement>) {
@@ -355,7 +351,7 @@ export default function CurveFit() {
         <button id="reset-priors" type="button" onClick={Reset}>
           Reset
         </button>
-        <button id="drift" type="button" onClick={Drift}>
+        <button id="drift" type="button" onClick={()=> Drift()}>
           Drift
         </button>
       </div>
