@@ -44,7 +44,7 @@ class Block:
         )
 
     def constraint_from_params(self, params):
-        return NotImplementedError()
+        return C.d({"NotImplemented": params})
 
     def curve_from_params(self, params):
         return BlockFunction(params, self.function_family)
@@ -347,10 +347,10 @@ class DataModel:
         )
 
     def constraint_from_params(self, params):
-        return NotImplementedError()
+        return C.d({"NotImplemented": params})
 
     def constraint_from_samples(self, samples):
-        return NotImplementedError()
+        return C.d({"NotImplemented": samples})
 
 
 class NoisyData(DataModel):
