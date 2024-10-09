@@ -8,7 +8,8 @@ import jax.numpy as jnp
 import jax.random
 from genjax import Pytree, ChoiceMapBuilder as C
 from genjax.core import GenerativeFunctionClosure, GenerativeFunction
-from genjax.typing import Callable, FloatArray, PRNGKey, ArrayLike, Tuple, List
+from genjax.typing import Callable, FloatArray, PRNGKey, ArrayLike
+
 import genstudio.plot as Plot
 
 
@@ -22,7 +23,7 @@ class Block:
     function_family: Callable  # type: ignore
     gf: GenerativeFunction
     jitted_sample: Callable  # type: ignore
-    address_segments: List[Tuple]
+    address_segments: list[tuple]
 
     def __init__(self, params_distribution, function_family, address_segments):
         self.params_distribution = params_distribution
@@ -62,7 +63,7 @@ class Block:
 class BlockFunction(Pytree):
     """A BlockFunction is a Pytree which is also Callable."""
 
-    params: FloatArray | Tuple
+    params: FloatArray | tuple
     function_family: Callable = Pytree.static()  # type: ignore
 
     def __call__(self, x: ArrayLike) -> FloatArray:
@@ -222,7 +223,7 @@ class CurveFit:
     gf: GenerativeFunction
     curve: Block
     jitted_importance: Callable  # type: ignore
-    coefficient_paths: List[Tuple]
+    coefficient_paths: list[tuple]
     categorical_sampler: Callable  # type: ignore
 
     def __init__(
@@ -388,7 +389,7 @@ class NoisyOutliersData(DataModel):
             return (sigma_in, p_out)
 
         @genjax.gen
-        def kernel(y_latent: ArrayLike, params: Tuple) -> FloatArray:
+        def kernel(y_latent: ArrayLike, params: tuple) -> FloatArray:
             sigma_in, p_out = params
 
             inlier_model = genjax.normal(y_latent, sigma_in)
@@ -418,7 +419,7 @@ class CurveDataModel:
     gf: GenerativeFunction
     jitted_sample: Callable  # type: ignore
     jitted_importance: Callable  # type: ignore
-    coefficient_paths: List[Tuple]
+    coefficient_paths: list[tuple]
 
     def __init__(self, curve, data_model):
         self.curve = curve
