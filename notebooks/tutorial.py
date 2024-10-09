@@ -343,11 +343,6 @@ Plot.new(
 
 # %%
 joint_model = b.CurveDataModel(periodic, noisy_data_model)
-jitted_grad = jax.jit(
-    jax.jacfwd(
-        lambda params: joint_model.log_density(params, sigma_in, xs, ys_observed)
-    )
-)
 
 N_fits = 12
 curves_optimized = [
