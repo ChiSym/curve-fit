@@ -429,15 +429,22 @@ jnp.array(
 # First generate plausible but probabilistically skewed data, then correct them by resampling.
 
 # %%
-curves = joint_model.importance_resample(xs, ys[0], 100000, 25).get_subtrace(("curve",)).get_retval()
+curves = (
+    joint_model.importance_resample(xs, ys[0], 100000, 25)
+    .get_subtrace(("curve",))
+    .get_retval()
+)
 
-Plot.new([
-    Plot.line(list(zip(xs_plot, ys_curve)), stroke=i)
-    for i, ys_curve in enumerate(jax.vmap(lambda curve: curve(xs_plot))(curves))
-] + [
-    Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
-    Plot.dot(list(zip(xs, ys_observed))),
-])
+Plot.new(
+    [
+        Plot.line(list(zip(xs_plot, ys_curve)), stroke=i)
+        for i, ys_curve in enumerate(jax.vmap(lambda curve: curve(xs_plot))(curves))
+    ]
+    + [
+        Plot.line(list(zip(xs_plot, sample_curve(xs_plot))), strokeDasharray="7"),
+        Plot.dot(list(zip(xs, ys_observed))),
+    ]
+)
 
 # %%
 curves.params
