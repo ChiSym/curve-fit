@@ -2,6 +2,7 @@
   "name": "genjs",
   "private": true,
   "version": "0.0.0",
+  "main": "index.html",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,16 +10,45 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@eslint/js": "^9.3.0",
+    "@eslint/js": "^9.9.0",
+    "@lezer/common": "^1.0.0",
     "@types/katex": "^0.16.7",
-    "eslint": "^9.3.0",
-    "globals": "^15.3.0",
+    "@types/lodash.throttle": "^4.1.9",
+    "@types/node": "^18.0.5",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "@webgpu/types": "^0.1.44",
+    "eslint": "^9.9.1",
+    "eslint-plugin-react-hooks": "^5.1.0-rc.0",
+    "eslint-plugin-react-refresh": "^0.4.9",
+    "globals": "^15.9.0",
     "prettier": "^3.2.5",
-    "typescript": "^5.4.5",
-    "typescript-eslint": "^8.0.0-alpha.20",
-    "vite": "^5.2.0"
+    "typescript": "^5.5.3",
+    "typescript-eslint": "^8.0.1",
+    "vite": "^5.4.1",
+    "vite-plugin-checker": "^0.7.2",
+    "vite-plugin-eslint": "^1.8.1",
+    "vite-plugin-top-level-await": "^1.4.4",
+    "vite-plugin-wasm": "^3.3.0"
   },
   "dependencies": {
-    "katex": "^0.16.11"
+    "@use-gpu/inspect": "^0.12.0-rc.3",
+    "@use-gpu/inspect-gpu": "^0.12.0-rc.3",
+    "@use-gpu/layout": "^0.12.0-rc.3",
+    "@use-gpu/live": "^0.12.0-rc.3",
+    "@use-gpu/parse": "^0.12.0-rc.3",
+    "@use-gpu/plot": "^0.12.0-rc.3",
+    "@use-gpu/react": "^0.12.0-rc.3",
+    "@use-gpu/shader": "^0.12.0-rc.3",
+    "@use-gpu/traits": "^0.12.0-rc.3",
+    "@use-gpu/webgpu": "^0.12.0-rc.3",
+    "@use-gpu/wgsl-loader": "^0.12.0-rc.3",
+    "@use-gpu/workbench": "^0.12.0-rc.3",
+    "katex": "^0.16.11",
+    "lodash.throttle": "^4.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-gauge-component": "^1.2.51"
   }
 }

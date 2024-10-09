@@ -6,7 +6,9 @@ export default [
   {
     languageOptions: { globals: globals.browser },
     files: ["src/**/*.ts"],
-    ignores: ["eslint.config.js", ".venv/"],
+  },
+  {
+    ignores: ["eslint.config.js", ".venv/", "dist/"],
   },
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,
