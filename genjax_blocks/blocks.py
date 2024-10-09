@@ -489,7 +489,17 @@ class CurveDataModel:
         of $N$ importance samples (so that $NK$ samples are taken overall)."""
         key1, key2 = jax.random.split(key)
 
-        constraint = C["data", "kernel", jnp.arange(len(ys)), "y"].set(ys)
+        constraint = C.d(
+            {
+                "data": C.d(
+                    {
+                        "kernel": C[jnp.arange(len(xs))].set(
+                            self.data_model.constraint_from_samples(ys)
+                        ),
+                    }
+                ),
+            }
+        )
         samples, log_weights = jax.vmap(
             self.jitted_importance, in_axes=(0, None, None)
         )(jax.random.split(key1, N * K), constraint, (xs,))
