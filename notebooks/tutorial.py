@@ -431,9 +431,7 @@ jnp.array(
 # %% [markdown]
 # ### Inference 1: needle in haystack
 #
-# First generate plausible but probabilistically skewed data, then must correct them by resampling.
-#
-# One might ask why not just take the single best fit.  Many reasons, starting with multi-modality, and eventually "seeing" more of the space of answers.
+# First generate plausible but probabilistically skewed data, then correct them by resampling.
 
 # %%
 # Importance sampling examples
