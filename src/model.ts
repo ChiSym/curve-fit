@@ -52,15 +52,18 @@ export class Model {
     const mu = distribution.get('mu')
     const sigma = distribution.get('sigma')
     log_w += logpdf_normal(drifted, mu, sigma) - logpdf_normal(this.model[i], mu, sigma)
-    // consider the updated likeliehood of the y values chosen by the
+    console.log(`${this.model[i]} -> ${drifted} N(${mu},${sigma}) log_w ${log_w} exp ${Math.exp(log_w)}`)
+    // consider the updated likelihood of the y values chosen by the
     // updated model
     for (let i = 0; i < points.length; ++i) {
       const inlier = (this.outlier & (1 << i)) == 0
       const y_i = points[i][1]
       if (inlier) {
-        log_w +=
+        const delta_log_w =
           logpdf_normal(new_ys[i], y_i, sigma_inlier) -
           logpdf_normal(old_ys[i], y_i, sigma_inlier)
+        log_w += delta_log_w
+        console.log(`${old_ys[i]} -> ${new_ys[i]} N(${y_i},${sigma_inlier}) log_w ${delta_log_w} exp ${Math.exp(delta_log_w)} total now ${log_w} exp ${Math.exp(log_w)}`)
       }
     }
     const choice = Math.random()

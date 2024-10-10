@@ -107,11 +107,13 @@ export class Animator {
   }
 
   public Drift() {
-    this.result.selectedModels.forEach((m) =>
-      Object.values(this.modelParameters).forEach((p, i) =>
-        m.drift_coefficient(i, 0.002, p, this.modelParameters.inlier.get('mu'), this.points)
-      )
-    )
+    this.result.selectedModels.forEach((m) => {
+      console.log(this.modelParameters)
+      m.drift_coefficient(0, 0.01, this.modelParameters.a_0, this.modelParameters.inlier.get('mu'), this.points)
+      // Object.values(this.modelParameters).forEach((p, i) =>
+      //   m.drift_coefficient(i, 0.1, p, this.modelParameters.inlier.get('mu'), this.points)
+      // )
+  })
   }
 
   public Reset() {
