@@ -271,7 +271,7 @@ export function importanceShader(nParameters: number): string {
         log_w += logpdf_normal(points[i].y, y_model, inlier_sigma);
       }
     }
-    log_w += logpdf_uniform(p_outlier, 0.0, 1.0);  // TODO: #define
+    log_w += logpdf_uniform(p_outlier, 0.0, 1.0);
     out_0 = polynomial_parameters[0];
     out_1 = polynomial_parameters[1];
     out_2 = polynomial_parameters[2];
