@@ -13,7 +13,7 @@ export default defineConfig({
   plugins: [
     wasm(),
     virtual({
-      'virtual:version': `export default '${execSync('git describe --tags').toString().replace(/\s/, '')}'`
+      'virtual:version': `export default '${execSync('git describe --tags --always').toString().replace(/\s/, '')}'`
     }),
     topLevelAwait(),
     react(),
