@@ -1,4 +1,3 @@
-declare module 'virtual:version' {
-  export default version;
+declare module "virtual:version" {
+  export default version
 }
-
