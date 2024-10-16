@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client"
 import { ErrorBoundary, FallbackProps } from "react-error-boundary"
 import "./style.css"
+import version from 'virtual:version'
 
 import App from "./App"
 import { ReactNode, StrictMode } from "react"
@@ -14,6 +15,7 @@ createRoot(document.getElementById("root")!,
     <h1>SIR Curve Fit</h1>
     <ErrorBoundary fallbackRender={fallbackRender}>
       <App />
+      <footer>{version}</footer>
     </ErrorBoundary>
   </StrictMode>,
 )
