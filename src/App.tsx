@@ -3,17 +3,15 @@ import { Animator, InferenceReport } from "./animator.ts"
 import { useCallback, useState, useRef, ChangeEvent, useEffect } from "react"
 import throttle from "lodash.throttle"
 import katex from "katex"
-import { InferenceParameters, InferenceResult } from "./gpgpu.ts"
+import { InferenceParameters } from "./gpgpu.ts"
 import { Normal, RunningStats, XDistribution } from "./stats.ts"
 import { TypedObject } from "./utils"
-import { Component } from "./live.tsx"
-import { LiveCanvas } from "@use-gpu/react"
 import GaugeComponent from "react-gauge-component"
+import { Render } from "./render.ts"
 
 // Selector values for the number of importance samples to draw per frame
 const Ns = [100, 1000, 5000, 10000, 50000, 100000]
 const maxN = Math.max(...Ns)
-
 
 export const modelParams: TypedObject<XDistribution> = {
   a_0: Normal(0, 2),
@@ -57,7 +55,7 @@ export default function CurveFit() {
 
   const [ips, setIps] = useState(0.0)
   const [fps, setFps] = useState(0.0)
-  const [visualizeInlierSigma, setVisualizeInlierSigma] = useState(false)
+  const setVisualizeInlierSigma = useState(false)[1]
   const [autoSIR, setAutoSIR] = useState(false)
   const [autoDrift, setAutoDrift] = useState(false)
 
@@ -89,12 +87,6 @@ export default function CurveFit() {
     }
   }
 
-  const [inferenceResult, setInferenceResult] = useState<InferenceResult>({
-    selectedModels: [],
-    ips: 0,
-    failedSamples: 0,
-  })
-
   function setter(data: InferenceReport) {
     // This function is handed to the inference loop, which uses it to convey summary data
     // back to the UI.
@@ -109,15 +101,20 @@ export default function CurveFit() {
     } else {
       throttledSetPosteriorState()
     }
-    setInferenceResult(data.inferenceResult)
   }
 
   useEffect(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>("#the-canvas")!
+    const renderer = new Render(canvas)
+    const frame_func = function (data: InferenceReport) {
+      renderer.render(data.inferenceResult, points.points, animatorRef.current!.vizInlierSigma)
+      setter(data)
+    }
     const a = (animatorRef.current = new Animator(
       modelParams,
       defaultInferenceParameters,
       maxN,
-      setter
+      frame_func,
     ))
     a.setInferenceParameters(inferenceParameters)
     a.setModelParameters(modelParams)
@@ -168,43 +165,58 @@ export default function CurveFit() {
   return (
     <>
       <div id="inference">
-        <div className="live-canvas" onClick={canvasClick}>
-          <LiveCanvas>
-            {(canvas) => (
-              <Component
-                canvas={canvas}
-                inferenceResult={inferenceResult}
-                points={points.points}
-                visualizeInlierSigma={visualizeInlierSigma}
-              />
-            )}
-          </LiveCanvas>
-        </div>
+        <canvas id="the-canvas" onClick={canvasClick}></canvas>
         <div id="inference-gauges">
           <div>
             <GaugeComponent
               id="outlier-gauge"
               className="inference-gauge"
-              value={outlier.get('mu')}
+              value={outlier.get("mu")}
               minValue={0.0}
               maxValue={1.0}
-              labels={{valueLabel: {style: {textShadow: 'none', fill: '#000'},
-              formatTextValue: (v => Number(v).toFixed(2))}}}
-              arc={{subArcs: [{length: 0.33, color: '#0f0'}, {length: 0.33, color: '#ff0'}, {length: 0.33, color:'#f00'}]}} />
-              <span>p<sub>outlier</sub></span>
-              </div>
+              labels={{
+                valueLabel: {
+                  style: { textShadow: "none", fill: "#000" },
+                  formatTextValue: (v) => Number(v).toFixed(2),
+                },
+              }}
+              arc={{
+                subArcs: [
+                  { length: 0.33, color: "#0f0" },
+                  { length: 0.33, color: "#ff0" },
+                  { length: 0.33, color: "#f00" },
+                ],
+              }}
+            />
+            <span>
+              p<sub>outlier</sub>
+            </span>
+          </div>
           <div>
             <GaugeComponent
               id="inlier-sigma-gauge"
               className="inference-gauge"
-              value={inlierSigma.get('mu')}
+              value={inlierSigma.get("mu")}
               minValue={0.0}
               maxValue={1.0}
-              labels={{valueLabel: {style: {textShadow: 'none', fill: '#000'},
-              formatTextValue: (v => Number(v).toFixed(2))}}}
-              arc={{subArcs: [{length: 0.33, color: '#0f0'}, {length: 0.33, color: '#ff0'}, {length: 0.33, color:'#f00'}]}} />
-              <span>&sigma;<sub>inlier</sub></span>
-              </div>
+              labels={{
+                valueLabel: {
+                  style: { textShadow: "none", fill: "#000" },
+                  formatTextValue: (v) => Number(v).toFixed(2),
+                },
+              }}
+              arc={{
+                subArcs: [
+                  { length: 0.33, color: "#0f0" },
+                  { length: 0.33, color: "#ff0" },
+                  { length: 0.33, color: "#f00" },
+                ],
+              }}
+            />
+            <span>
+              &sigma;<sub>inlier</sub>
+            </span>
+          </div>
         </div>
       </div>
       <InferenceUI
@@ -293,7 +305,6 @@ export default function CurveFit() {
           <br />
           IPS: <span id="ips">{(ips / 1e6).toFixed(2) + " M"}</span>
           <br />
-
         </div>
       </div>
       <div className="extra-components">
@@ -339,7 +350,11 @@ export default function CurveFit() {
           <input
             id="visualizeInlierSigma"
             type="checkbox"
-            onChange={(e) => setVisualizeInlierSigma(e.target.checked)}
+            onChange={(e) => {
+              const b = e.target.checked
+              setVisualizeInlierSigma(b)
+              animatorRef.current!.vizInlierSigma = b
+            }}
           />
           viz inlier sigma
         </label>
@@ -351,7 +366,7 @@ export default function CurveFit() {
         <button id="reset-priors" type="button" onClick={Reset}>
           Reset
         </button>
-        <button id="drift" type="button" onClick={()=> Drift()}>
+        <button id="drift" type="button" onClick={() => Drift()}>
           Drift
         </button>
       </div>

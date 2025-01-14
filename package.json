@@ -19,6 +19,7 @@
     "@types/node": "^18.0.5",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.172.0",
     "@vitejs/plugin-react": "^4.3.1",
     "@webgpu/types": "^0.1.44",
     "eslint": "^9.9.1",
@@ -38,23 +39,12 @@
     "vite-plugin-wasm": "^3.3.0"
   },
   "dependencies": {
-    "@use-gpu/inspect": "^0.12.0-rc.3",
-    "@use-gpu/inspect-gpu": "^0.12.0-rc.3",
-    "@use-gpu/layout": "^0.12.0-rc.3",
-    "@use-gpu/live": "^0.12.0-rc.3",
-    "@use-gpu/parse": "^0.12.0-rc.3",
-    "@use-gpu/plot": "^0.12.0-rc.3",
-    "@use-gpu/react": "^0.12.0-rc.3",
-    "@use-gpu/shader": "^0.12.0-rc.3",
-    "@use-gpu/traits": "^0.12.0-rc.3",
-    "@use-gpu/webgpu": "^0.12.0-rc.3",
-    "@use-gpu/wgsl-loader": "^0.12.0-rc.3",
-    "@use-gpu/workbench": "^0.12.0-rc.3",
     "katex": "^0.16.11",
     "lodash.throttle": "^4.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-error-boundary": "^4.0.13",
-    "react-gauge-component": "^1.2.51"
+    "react-gauge-component": "^1.2.51",
+    "three": "^0.172.0"
   }
 }

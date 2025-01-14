@@ -1,8 +1,4 @@
-import {
-  logpdf_normal,
-  sample_normal,
-  XDistribution,
-} from "./stats"
+import { logpdf_normal, sample_normal, XDistribution } from "./stats"
 import { TypedObject } from "./utils"
 
 export class Model {
@@ -39,20 +35,26 @@ export class Model {
     scale: number,
     distribution: XDistribution,
     sigma_inlier: number,
-    points: number[][]
+    points: number[][],
   ) {
     const drifted = this.model[i] + scale * sample_normal()
     const old_ys = points.map(([x]) => this.fn(x))
     const drifted_cs = this.model.slice()
     drifted_cs[i] = drifted
-    const new_ys = points.map(([x]) => Model.fn_from_coefficients(drifted_cs, x))
+    const new_ys = points.map(([x]) =>
+      Model.fn_from_coefficients(drifted_cs, x),
+    )
     let log_w = 0.0
     // consider the change in logpdf of the coefficient itself
     // TODO move logpdf into XDistribution
-    const mu = distribution.get('mu')
-    const sigma = distribution.get('sigma')
-    log_w += logpdf_normal(drifted, mu, sigma) - logpdf_normal(this.model[i], mu, sigma)
-    console.log(`${this.model[i]} -> ${drifted} N(${mu},${sigma}) log_w ${log_w} exp ${Math.exp(log_w)}`)
+    const mu = distribution.get("mu")
+    const sigma = distribution.get("sigma")
+    log_w +=
+      logpdf_normal(drifted, mu, sigma) -
+      logpdf_normal(this.model[i], mu, sigma)
+    console.log(
+      `${this.model[i]} -> ${drifted} N(${mu},${sigma}) log_w ${log_w} exp ${Math.exp(log_w)}`,
+    )
     // consider the updated likelihood of the y values chosen by the
     // updated model
     for (let i = 0; i < points.length; ++i) {
@@ -63,17 +65,23 @@ export class Model {
           logpdf_normal(new_ys[i], y_i, sigma_inlier) -
           logpdf_normal(old_ys[i], y_i, sigma_inlier)
         log_w += delta_log_w
-        console.log(`${old_ys[i]} -> ${new_ys[i]} N(${y_i},${sigma_inlier}) log_w ${delta_log_w} exp ${Math.exp(delta_log_w)} total now ${log_w} exp ${Math.exp(log_w)}`)
+        console.log(
+          `${old_ys[i]} -> ${new_ys[i]} N(${y_i},${sigma_inlier}) log_w ${delta_log_w} exp ${Math.exp(delta_log_w)} total now ${log_w} exp ${Math.exp(log_w)}`,
+        )
       }
     }
     const choice = Math.random()
     if (choice < Math.exp(log_w)) {
       // accept
       //console.log(`${choice} ${Math.exp(log_w)} accepted`)
-      console.log(`update [${i}] ${this.model[i]} -> ${drifted} ${Math.exp(log_w)} ACCEPT`)
+      console.log(
+        `update [${i}] ${this.model[i]} -> ${drifted} ${Math.exp(log_w)} ACCEPT`,
+      )
       this.model[i] = drifted
     } else {
-      console.log(`update [${i}] ${this.model[i]} -> ${drifted} ${Math.exp(log_w)} REJECT`)
+      console.log(
+        `update [${i}] ${this.model[i]} -> ${drifted} ${Math.exp(log_w)} REJECT`,
+      )
     }
   }
 

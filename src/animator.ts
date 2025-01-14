@@ -44,6 +44,7 @@ export class Animator {
   private totalFailedSamples = 0
   private t0: DOMHighResTimeStamp = performance.now()
   private result: InferenceResult
+  vizInlierSigma: boolean = false
 
   constructor(
     modelParameters: TypedObject<XDistribution>,
@@ -92,7 +93,6 @@ export class Animator {
   }
 
   public setAutoDrift(autoDrift: boolean) {
-    console.log(`auto drfit ${autoDrift}`)
     this.autoDrift = autoDrift
   }
 
@@ -109,11 +109,17 @@ export class Animator {
   public Drift() {
     this.result.selectedModels.forEach((m) => {
       console.log(this.modelParameters)
-      m.drift_coefficient(0, 0.01, this.modelParameters.a_0, this.modelParameters.inlier.get('mu'), this.points)
+      m.drift_coefficient(
+        0,
+        0.01,
+        this.modelParameters.a_0,
+        this.modelParameters.inlier.get("mu"),
+        this.points,
+      )
       // Object.values(this.modelParameters).forEach((p, i) =>
       //   m.drift_coefficient(i, 0.1, p, this.modelParameters.inlier.get('mu'), this.points)
       // )
-  })
+    })
   }
 
   public Reset() {
@@ -188,6 +194,7 @@ export class Animator {
             inferenceResult: this.result, // TODO: make a getter
           }
           this.inferenceReportCallback(info)
+
           // emptyPosterior.innerText = totalFailedSamples.toString()
         }
         if (stopAnimation) {

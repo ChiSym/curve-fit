@@ -19,7 +19,7 @@ div#inference {
   grid-gap: 10px;
 }
 
-div.live-canvas {
+#the-canvas {
   width: 400px;
   height: 400px;
   position: relative;
