@@ -17,13 +17,6 @@ export class Render {
     this.renderer.setClearColor(0xffffff)
   }
 
-  private modelToFn(model: Float32Array) {
-    return (x: number) => {
-      const [a0, a1, a2, omega, A, phi] = model
-      return a0 + x * a1 + x * x * a2 + A * Math.sin(phi + omega * x)
-    }
-  }
-
   render(
     inferenceResult: InferenceResult,
     points: number[][],
@@ -34,12 +27,11 @@ export class Render {
     const scene = new THREE.Scene()
     const outlierCounts = new Array(points.length).fill(0)
     inferenceResult.selectedModels.forEach((m) => {
-      const f = this.modelToFn(m.model)
       const N = 50
       const pts = Array(N)
       for (let i = 0; i < N; ++i) {
         const x = i / 25 - 1
-        const y = f(x)
+        const y = m.f(x)
         pts[i] = new THREE.Vector3(x, y, 0)
       }
       scene.add(

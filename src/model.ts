@@ -14,20 +14,23 @@ export class Model {
     this.log_weight = log_weight
     this.p_outlier = p_outlier
     this.inlier_sigma = inlier_sigma
+    this.f = Model.fn_from_coefficients(this.model)
   }
 
   public readonly model: Float32Array
   public readonly outlier: number
   public readonly log_weight: number
   public readonly p_outlier: number
+  f: (x: number) => number
   public inlier_sigma: number
-  public fn(x: number) {
-    return Model.fn_from_coefficients(this.model, x)
-  }
-  static fn_from_coefficients(c: Float32Array, x: number) {
-    const y_poly = c[0] + x * c[1] + x * x * c[2]
-    const y_periodic = c[4] + Math.sin(c[5] + c[3] * x)
-    return y_poly + y_periodic
+  // TODO: get rid of this once we move drift to shader.
+  static fn_from_coefficients(c: Float32Array) {
+    const [a0, a1, a2, omega, A, phi] = c
+    return (x: number) => {
+      const y_poly = a0 + x * a1 + x * x * a2
+      const y_periodic = A * Math.sin(phi + omega * x)
+      return y_poly + y_periodic
+    }
   }
 
   public drift_coefficient(
@@ -38,12 +41,11 @@ export class Model {
     points: number[][],
   ) {
     const drifted = this.model[i] + scale * sample_normal()
-    const old_ys = points.map(([x]) => this.fn(x))
+    const old_ys = points.map(([x]) => this.f(x))
     const drifted_cs = this.model.slice()
     drifted_cs[i] = drifted
-    const new_ys = points.map(([x]) =>
-      Model.fn_from_coefficients(drifted_cs, x),
-    )
+    const f = Model.fn_from_coefficients(drifted_cs)
+    const new_ys = points.map(p => f(p[0]))
     let log_w = 0.0
     // consider the change in logpdf of the coefficient itself
     // TODO move logpdf into XDistribution
@@ -52,9 +54,9 @@ export class Model {
     log_w +=
       logpdf_normal(drifted, mu, sigma) -
       logpdf_normal(this.model[i], mu, sigma)
-    console.log(
-      `${this.model[i]} -> ${drifted} N(${mu},${sigma}) log_w ${log_w} exp ${Math.exp(log_w)}`,
-    )
+    // console.log(
+    //   `${this.model[i]} -> ${drifted} N(${mu},${sigma}) log_w ${log_w} exp ${Math.exp(log_w)}`,
+    // )
     // consider the updated likelihood of the y values chosen by the
     // updated model
     for (let i = 0; i < points.length; ++i) {
@@ -65,23 +67,24 @@ export class Model {
           logpdf_normal(new_ys[i], y_i, sigma_inlier) -
           logpdf_normal(old_ys[i], y_i, sigma_inlier)
         log_w += delta_log_w
-        console.log(
-          `${old_ys[i]} -> ${new_ys[i]} N(${y_i},${sigma_inlier}) log_w ${delta_log_w} exp ${Math.exp(delta_log_w)} total now ${log_w} exp ${Math.exp(log_w)}`,
-        )
+        // console.log(
+        //   `${old_ys[i]} -> ${new_ys[i]} N(${y_i},${sigma_inlier}) log_w ${delta_log_w} exp ${Math.exp(delta_log_w)} total now ${log_w} exp ${Math.exp(log_w)}`,
+        // )
       }
     }
     const choice = Math.random()
     if (choice < Math.exp(log_w)) {
       // accept
       //console.log(`${choice} ${Math.exp(log_w)} accepted`)
-      console.log(
-        `update [${i}] ${this.model[i]} -> ${drifted} ${Math.exp(log_w)} ACCEPT`,
-      )
+      // console.log(
+      //   `update [${i}] ${this.model[i]} -> ${drifted} ${Math.exp(log_w)} ACCEPT`,
+      // )
       this.model[i] = drifted
+      this.f = Model.fn_from_coefficients(this.model)
     } else {
-      console.log(
-        `update [${i}] ${this.model[i]} -> ${drifted} ${Math.exp(log_w)} REJECT`,
-      )
+      // console.log(
+      //   `update [${i}] ${this.model[i]} -> ${drifted} ${Math.exp(log_w)} REJECT`,
+      // )
     }
   }
 
@@ -91,8 +94,9 @@ export class Model {
     points: number[][],
   ) {
     const drifted = this.model.map((v) => v + scale * sample_normal())
-    const old_ys = points.map(([x]) => this.fn(x))
-    const new_ys = points.map(([x]) => Model.fn_from_coefficients(drifted, x))
+    const old_ys = points.map(p => this.f(p[0]))
+    const f2 = Model.fn_from_coefficients(drifted)
+    const new_ys = points.map(p => f2(p[0]))
     // compute update score
     // hm. we need the distribution that generates coefficients, which
     // we don't have here. Maybe this function belongs somewhere else?
@@ -127,6 +131,7 @@ export class Model {
       // accept
       //console.log(`${choice} ${Math.exp(log_w)} accepted`)
       this.model.set(drifted)
+      this.f = Model.fn_from_coefficients(drifted)
     } else {
       //console.log(`${choice} ${Math.exp(log_w)} rejected`)
     }
@@ -143,7 +148,7 @@ export class Model {
     const new_inlier_sigma = old_inlier_sigma + delta
     let log_w = logpdf_normal(new_inlier_sigma, old_inlier_sigma, sigma_sigma)
     // now compute the likelihoods of the inlier y's under this sigma
-    const ys = points.map(([x]) => this.fn(x))
+    const ys = points.map(([x]) => this.f(x))
     for (let i = 0; i < ys.length; ++i) {
       if ((this.outlier & (1 << i)) == 0) {
         // inlier
@@ -151,7 +156,7 @@ export class Model {
       }
     }
 
-    console.log(`sigma_inlier update log_w ${log_w}`)
+    //console.log(`sigma_inlier update log_w ${log_w}`)
     const choice = Math.random()
     if (choice <= Math.exp(log_w)) {
       // accept
@@ -160,9 +165,9 @@ export class Model {
       // )
       this.inlier_sigma = new_inlier_sigma
     } else {
-      console.log(
-        `rejected inlier_sigma update ${this.inlier_sigma} -> ${new_inlier_sigma}`,
-      )
+      // console.log(
+      //   `rejected inlier_sigma update ${this.inlier_sigma} -> ${new_inlier_sigma}`,
+      // )
     }
   }
 }
