@@ -117,7 +117,13 @@ export class Animator {
       //   this.points,
       // )
       Object.values(this.modelParameters).forEach((p, i) =>
-        m.drift_coefficient(i, 0.02, p, this.modelParameters.inlier.get('mu'), this.points)
+        m.drift_coefficient(
+          i,
+          0.02,
+          p,
+          this.modelParameters.inlier.get("mu"),
+          this.points,
+        ),
       )
     })
   }

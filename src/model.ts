@@ -45,7 +45,7 @@ export class Model {
     const drifted_cs = this.model.slice()
     drifted_cs[i] = drifted
     const f = Model.fn_from_coefficients(drifted_cs)
-    const new_ys = points.map(p => f(p[0]))
+    const new_ys = points.map((p) => f(p[0]))
     let log_w = 0.0
     // consider the change in logpdf of the coefficient itself
     // TODO move logpdf into XDistribution
@@ -94,9 +94,9 @@ export class Model {
     points: number[][],
   ) {
     const drifted = this.model.map((v) => v + scale * sample_normal())
-    const old_ys = points.map(p => this.f(p[0]))
+    const old_ys = points.map((p) => this.f(p[0]))
     const f2 = Model.fn_from_coefficients(drifted)
-    const new_ys = points.map(p => f2(p[0]))
+    const new_ys = points.map((p) => f2(p[0]))
     // compute update score
     // hm. we need the distribution that generates coefficients, which
     // we don't have here. Maybe this function belongs somewhere else?
