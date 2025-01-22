@@ -6,19 +6,6 @@ import {
 import { RunningStats, XDistribution } from "./stats.ts"
 import { TypedObject } from "./utils"
 
-function log(level: string, message: unknown): void {
-  if (level === "error") {
-    console.error(message)
-  } else {
-    console.info(message)
-  }
-  const d = document.createElement("div")
-  d.className = "log-" + level
-  const t = document.createTextNode(message + "")
-  d.appendChild(t)
-  document.querySelector("#root")?.appendChild(d)
-}
-
 export interface InferenceReport {
   fps: number
   totalFailedSamples: number
@@ -40,11 +27,11 @@ export class Animator {
   private autoSIR: boolean = false
   private autoDrift: boolean = false
   private componentEnable: TypedObject<boolean> = {}
-  private frameCount = 0
   private totalFailedSamples = 0
-  private t0: DOMHighResTimeStamp = performance.now()
+  private gpu: GPGPU_Inference
   private result: InferenceResult
   vizInlierSigma: boolean = false
+  private frameTimeBuf: number[] = []
 
   constructor(
     modelParameters: TypedObject<XDistribution>,
@@ -66,6 +53,11 @@ export class Animator {
       ips: 0,
       failedSamples: 0,
     }
+    this.gpu = new GPGPU_Inference(
+      Object.keys(this.modelParameters).length,
+      this.maxSamplesPerParticle,
+    )
+    console.log("created an animator")
   }
 
   public setInferenceParameters(ps: InferenceParameters) {
@@ -131,92 +123,87 @@ export class Animator {
   public Reset() {
     this.result.selectedModels = []
     this.totalFailedSamples = 0
-    this.frameCount = 0
-    this.t0 = performance.now()
+    this.frameTimeBuf.length = 0
   }
 
-  // Sets up and runs the inference animation. Returns a function which can
-  // be used to halt the animation (after the current frame is done).
-  public run(): () => void {
-    // XXX: could get the above two constants by looking at the HTML,
-    // but we really should learn to use a framework at some point
-    const gpu = new GPGPU_Inference(
-      Object.keys(this.modelParameters).length,
-      this.maxSamplesPerParticle,
-    )
-
-    let stopAnimation = false
-    this.t0 = performance.now() // TODO: need to reset this from time to time along with frame count
-
-    const frame = (t: DOMHighResTimeStamp) => {
-      try {
-        if (!this.pause) {
-          if (this.autoDrift) {
-            if (!this.result.selectedModels.length) {
-              this.result = gpu.inference(
-                {
-                  points: this.points,
-                  coefficients: this.modelParameters,
-                  component_enable: this.componentEnable,
-                },
-                this.inferenceParameters,
-              )
-            }
-            this.Drift()
-          } else {
-            this.result = gpu.inference(
-              {
-                points: this.points,
-                coefficients: this.modelParameters,
-                component_enable: this.componentEnable,
-              },
-              this.inferenceParameters,
-            )
-          }
+  public awaitResult() {
+    if (!this.pause) {
+      if (this.autoDrift) {
+        if (!this.result.selectedModels.length) {
+          this.result = this.gpu.inference(
+            {
+              points: this.points,
+              coefficients: this.modelParameters,
+              component_enable: this.componentEnable,
+            },
+            this.inferenceParameters,
+          )
         }
-        if (this.result) {
-          this.totalFailedSamples += this.result.failedSamples
-
-          const pOutlierStats = new RunningStats()
-          const inlierSigmaStats = new RunningStats()
-
-          for (const m of this.result.selectedModels) {
-            let i = 0
-            for (const v of Object.values(this.stats)) {
-              v.observe(m.model[i++])
-            }
-            pOutlierStats.observe(m.p_outlier)
-            inlierSigmaStats.observe(m.inlier_sigma)
-          }
-          ++this.frameCount
-          const fps = Math.trunc(this.frameCount / ((t - this.t0) / 1e3))
-          const info = {
-            totalFailedSamples: this.totalFailedSamples,
-            fps: fps,
-            autoSIR: this.autoSIR,
-            autoDrift: this.autoDrift,
-            pOutlierStats: pOutlierStats,
-            inlierSigmaStats: inlierSigmaStats,
-            inferenceResult: this.result, // TODO: make a getter
-          }
-          this.inferenceReportCallback(info)
-
-          // emptyPosterior.innerText = totalFailedSamples.toString()
-        }
-        if (stopAnimation) {
-          console.log("halting animation")
-          return
-        }
-        requestAnimationFrame(frame)
-      } catch (error) {
-        log("error", error)
+        this.Drift()
+      } else {
+        this.result = this.gpu.inference(
+          {
+            points: this.points,
+            coefficients: this.modelParameters,
+            component_enable: this.componentEnable,
+          },
+          this.inferenceParameters,
+        )
       }
     }
-    console.log("starting animation")
-    requestAnimationFrame(frame)
-    return () => {
-      console.log("requesting animation halt")
-      stopAnimation = true
+    this.totalFailedSamples += this.result.failedSamples
+
+    const pOutlierStats = new RunningStats()
+    const inlierSigmaStats = new RunningStats()
+
+    for (const m of this.result.selectedModels) {
+      let i = 0
+      for (const v of Object.values(this.stats)) {
+        v.observe(m.model[i++])
+      }
+      pOutlierStats.observe(m.p_outlier)
+      inlierSigmaStats.observe(m.inlier_sigma)
     }
+    const now = performance.now()
+    this.frameTimeBuf.push(now)
+    while (this.frameTimeBuf.length && this.frameTimeBuf[0] < now - 1000)
+      this.frameTimeBuf.shift()
+    const fps = this.frameTimeBuf.length
+    const info = {
+      totalFailedSamples: this.totalFailedSamples,
+      fps: fps,
+      autoSIR: this.autoSIR,
+      autoDrift: this.autoDrift,
+      pOutlierStats: pOutlierStats,
+      inlierSigmaStats: inlierSigmaStats,
+      inferenceResult: this.result, // TODO: make a getter
+    }
+    this.inferenceReportCallback(info)
+    return info
   }
+
+  // // Sets up and runs the inference animation. Returns a function which can
+  // // be used to halt the animation (after the current frame is done).
+  // public run(): () => void {
+  //   let stopAnimation = false
+  //   this.t0 = performance.now() // TODO: need to reset this from time to time along with frame count
+
+  //   const frame = (elapsedTime: number) => {
+
+  //       if (stopAnimation) {
+  //         console.log("halting animation")
+  //         return
+  //       }
+  //       requestAnimationFrame(frame)
+  //     } catch (error) {
+  //       log("error", error)
+  //     }
+  //   }
+  //   console.log("starting animation")
+  //   requestAnimationFrame(frame)
+  //   return () => {
+  //     console.log("requesting animation halt")
+  //     stopAnimation = true
+  //   }
+  // }
 }

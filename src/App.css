@@ -19,10 +19,11 @@ div#inference {
   grid-gap: 10px;
 }
 
-#the-canvas {
+#plot-container {
   width: 400px;
   height: 400px;
   position: relative;
+  background-color: #ccc;
 }
 
 
@@ -58,7 +59,13 @@ span.posterior {
 }
 
 @media (prefers-color-scheme: dark) {
-  div#model-components {
-    color: #222;
+  div.value-group {
+    background-color: #234;
+  }
+  span.posterior {
+    color: #0a0;
+  }
+  div.prior-component-title {
+    background-color: #333;
   }
 }

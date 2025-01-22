@@ -15,6 +15,12 @@ export class Model {
     this.p_outlier = p_outlier
     this.inlier_sigma = inlier_sigma
     this.f = Model.fn_from_coefficients(this.model)
+    // for (let z = 1, i = 0; i < points.length; ++i, z <<= 1) {
+    //   // TODO: this nonsense is spread throughout the codebase. Make it a method of Model
+    //   // so that we only have to do this once & the weird implementation detail of the
+    //   // outlier bitfield doesn't have to be understood by everyone
+    //   if (m.outlier & z) ++inlierCounts[i]
+    // }
   }
 
   public readonly model: Float32Array

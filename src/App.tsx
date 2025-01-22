@@ -1,13 +1,14 @@
 import "./App.css"
 import { Animator, InferenceReport } from "./animator.ts"
 import { useCallback, useState, useRef, ChangeEvent, useEffect } from "react"
-import throttle from "lodash.throttle"
 import katex from "katex"
 import { InferenceParameters } from "./gpgpu.ts"
 import { Normal, RunningStats, XDistribution } from "./stats.ts"
 import { TypedObject } from "./utils"
 import GaugeComponent from "react-gauge-component"
-import { Render } from "./render.ts"
+import { Plot } from "./plot"
+import { Canvas } from "@react-three/fiber"
+import throttle from "lodash.throttle"
 
 // Selector values for the number of importance samples to draw per frame
 const Ns = [100, 1000, 5000, 10000, 50000, 100000]
@@ -29,7 +30,7 @@ const defaultInferenceParameters: InferenceParameters = {
 }
 
 export default function CurveFit() {
-  const animatorRef = useRef<Animator | null>(null)
+  const animatorRef = useRef<Animator>(null!)
 
   const [inferenceParameters, setInferenceParameters] = useState(
     defaultInferenceParameters,
@@ -55,31 +56,25 @@ export default function CurveFit() {
 
   const [ips, setIps] = useState(0.0)
   const [fps, setFps] = useState(0.0)
-  const setVisualizeInlierSigma = useState(false)[1]
+  const [vizInlierSigma, setVisualizeInlierSigma] = useState(false)
   const [autoSIR, setAutoSIR] = useState(false)
   const [autoDrift, setAutoDrift] = useState(false)
 
   function modelChange(k1: string, k2: string, v: number) {
     setModelState({ ...modelState, [k1]: modelState[k1]!.assoc(k2, v) })
-    animatorRef.current?.setModelParameters(modelState)
+    animatorRef.current.setModelParameters(modelState)
   }
 
   const [outlier, setOutlier] = useState(Normal(0, 0))
   const [inlierSigma, setInlierSigma] = useState(Normal(0, 0))
 
-  const setStats = throttle((outlierStats, inlierSigmaStats: RunningStats) => {
+  const setStats = (outlierStats, inlierSigmaStats: RunningStats) => {
     setOutlier(outlierStats.summarize())
     setInlierSigma(inlierSigmaStats.summarize())
-  }, 250)
-
-  const throttledSetIps = throttle(setIps, 500)
-  const throttledSetFps = throttle(setFps, 500)
-  const throttledSetPosteriorState = throttle(() => {
-    setPosteriorState(animatorRef.current?.getPosterior() || {})
-  }, 500)
+  }
 
   function SIR_Update() {
-    const s = animatorRef.current?.getPosterior()
+    const s = animatorRef.current.getPosterior()
     if (s) {
       setModelState(s)
       setPosteriorState(s)
@@ -91,36 +86,34 @@ export default function CurveFit() {
     // This function is handed to the inference loop, which uses it to convey summary data
     // back to the UI.
     setEmptyPosterior(data.totalFailedSamples)
-    throttledSetIps(data.inferenceResult.ips)
-    throttledSetFps(data.fps)
+    setIps(data.inferenceResult.ips)
+    setFps(data.fps)
     setStats(data.pOutlierStats, data.inlierSigmaStats)
-    if (data.autoSIR) {
-      SIR_Update()
-    } else if (data.autoDrift) {
-      Drift()
-    } else {
-      throttledSetPosteriorState()
-    }
+    setPosteriorState(animatorRef.current.getPosterior())
   }
 
   useEffect(() => {
-    const canvas = document.querySelector<HTMLCanvasElement>("#the-canvas")!
-    const renderer = new Render(canvas)
-    const frame_func = function (data: InferenceReport) {
-      renderer.render(data.inferenceResult, points.points, animatorRef.current!.vizInlierSigma)
-      setter(data)
+    const tSetter = throttle(setter, 500)
+
+    function callback(r: InferenceReport) {
+      if (r.autoSIR) {
+        SIR_Update()
+      } else if (r.autoDrift) {
+        animatorRef.current.Drift()
+      }
+      tSetter(r)
     }
     const a = (animatorRef.current = new Animator(
       modelParams,
       defaultInferenceParameters,
       maxN,
-      frame_func,
+      callback,
     ))
     a.setInferenceParameters(inferenceParameters)
     a.setModelParameters(modelParams)
     a.setPoints(points.points)
     a.setComponentEnable(componentEnable)
-    return a.run()
+    //return a.run()
   }, [])
 
   const componentsRef = useCallback((element: HTMLElement | null) => {
@@ -165,7 +158,13 @@ export default function CurveFit() {
   return (
     <>
       <div id="inference">
-        <canvas id="the-canvas" onClick={canvasClick}></canvas>
+        <div id="plot-container">
+          <Canvas id="the-canvas" orthographic onClick={canvasClick}>
+            <ambientLight intensity={0.1} />
+            <directionalLight position={[2, 2, 5]} color="red" />
+            <Plot animatorRef={animatorRef} points={points.points} vizInlierSigma={vizInlierSigma}/>
+          </Canvas>
+        </div>
         <div id="inference-gauges">
           <div>
             <GaugeComponent
@@ -176,7 +175,7 @@ export default function CurveFit() {
               maxValue={1.0}
               labels={{
                 valueLabel: {
-                  style: { textShadow: "none", fill: "#000" },
+                  style: { textShadow: "none", fill: "#888" },
                   formatTextValue: (v) => Number(v).toFixed(2),
                 },
               }}
@@ -201,7 +200,7 @@ export default function CurveFit() {
               maxValue={1.0}
               labels={{
                 valueLabel: {
-                  style: { textShadow: "none", fill: "#000" },
+                  style: { textShadow: "none", fill: "#888" },
                   formatTextValue: (v) => Number(v).toFixed(2),
                 },
               }}
@@ -301,15 +300,13 @@ export default function CurveFit() {
               ></ComponentParameter>
             ))}
           </ModelComponent>
-          FPS: <span id="fps">{fps}</span>
-          <br />
-          IPS: <span id="ips">{(ips / 1e6).toFixed(2) + " M"}</span>
-          <br />
         </div>
       </div>
       <div className="extra-components">
         empty posterior: <span id="empty-posterior">{emptyPosterior}</span>
-        <br />
+        <span style={{paddingLeft: '1em'}}>FPS: </span><span id="fps">{fps}</span>
+        <span style={{paddingLeft: '1em'}}>IPS: </span><span id="ips">{(ips / 1e6).toFixed(2) + " M"}</span>
+        <br/>
         <label>
           <input
             id="pause"
@@ -318,8 +315,7 @@ export default function CurveFit() {
           />
           pause
         </label>
-        &nbsp;&nbsp;
-        <label>
+        <label style={{paddingLeft: "1em"}}>
           <input
             id="auto-SIR"
             type="checkbox"
@@ -332,7 +328,7 @@ export default function CurveFit() {
           />
           Auto-SIR
         </label>
-        <label>
+        <label style={{paddingLeft: "1em"}}>
           <input
             id="auto-Drift"
             type="checkbox"
@@ -345,8 +341,7 @@ export default function CurveFit() {
           />
           Auto-Drift
         </label>
-        &nbsp;&nbsp;
-        <label>
+        <label style={{paddingLeft: "1em"}}>
           <input
             id="visualizeInlierSigma"
             type="checkbox"
