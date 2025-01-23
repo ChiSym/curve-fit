@@ -1,8 +1,8 @@
 import "@react-three/fiber"
 import { useFrame, useThree } from "@react-three/fiber"
-import { Ref, useEffect, useMemo, useState } from "react"
+import { RefObject, useEffect, useMemo, useState } from "react"
 import { Color, OrthographicCamera, Vector3 } from "three"
-import { Circle, Line } from "@react-three/drei"
+import { Circle, Instance, Instances, Line } from "@react-three/drei"
 import { Model } from "./model"
 import { Animator } from "./animator"
 
@@ -11,8 +11,8 @@ export function Plot({
   points,
   vizInlierSigma,
 }: {
-  animatorRef: Ref<Animator>
-  points: object
+  animatorRef: RefObject<Animator>
+  points: number[][]
   vizInlierSigma: boolean
 }) {
   const { camera } = useThree()
@@ -31,16 +31,18 @@ export function Plot({
     camera.updateProjectionMatrix()
   }, [])
 
-  useFrame(({ clock }) => {
-    const r = animatorRef.current.awaitResult(clock.getDelta())
-    setModels(r.inferenceResult.selectedModels)
+  useFrame(() => {
+    if (animatorRef.current) {
+      const r = animatorRef.current.awaitResult()
+      setModels(r.inferenceResult.selectedModels)
+    }
   })
 
   return (
     <>
       <Axes />
       <CurvePoints models={models} points={points}></CurvePoints>
-      {vizInlierSigma && <InlierCircles models={models} points={points}/>}
+      {vizInlierSigma && <InlierCircles models={models} points={points} />}
       <Curves models={models}></Curves>
     </>
   )
@@ -104,29 +106,27 @@ function InlierCircles({
   models: Model[]
   points: number[][]
 }) {
-  const pts = useMemo(() => {
-    const N = 24
-    const pts = new Array(24)
-    for (let i = 0; i <= N; ++i) {
-      const t = 2 * Math.PI * i / N
-      pts[i] = [Math.cos(t), Math.sin(t)]
-    }
-    return pts
-  }, [])
-  return points.flatMap(
-    (p) =>
-      models.map(
-        (m) => (
-          <Line points={pts} position={[p[0], p[1], 0]} scale={m.inlier_sigma} color="green">
-          </Line>
-          // <EllipseCurve ></EllipseCurve>
-          // <Circle position={[p[0], p[1], 0]} args={[m.inlier_sigma, 12]}>
-          //   <meshBasicMaterial transparent={true} opacity={0.5} color="green" />
-          // </Circle>
-        ),
-        models,
-      ),
-    points,
+  const pts = useMemo(() => AnnularGeometry(24, 0.03), [])
+  return (
+    <Instances>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          array={pts}
+          itemSize={3}
+          count={pts.length / 3}
+        ></bufferAttribute>
+      </bufferGeometry>
+      <lineBasicMaterial color="green"></lineBasicMaterial>
+      {points.flatMap((p) =>
+        models.map((m) => (
+          <Instance
+            position={[p[0], p[1], 0]}
+            scale={m.inlier_sigma}
+          ></Instance>
+        )),
+      )}
+    </Instances>
   )
 }
 
@@ -148,4 +148,47 @@ function Curves({ models }: { models: Model[] }) {
       points={curve_points(m)}
     />
   ))
+}
+
+// R3F seems to be missing a way to produce an "instanced line".
+// Instead we make a mesh for an annular region, so that we get
+// and "instance-able circle" with variable thickness. The inner
+// and outer circles are drawn with N points, and the annulus is
+// bounded by the radii [1, 1+dr]
+function AnnularGeometry(N: number, dr: number) {
+  const innerCircle = Array(N + 1)
+  const outerCircle = Array(N + 1)
+  const drp1 = dr + 1
+  for (let i = 0; i <= N; ++i) {
+    const t = (2 * Math.PI * i) / N
+    innerCircle[i] = [Math.cos(t), Math.sin(t)]
+    outerCircle[i] = [drp1 * Math.cos(t), drp1 * Math.sin(t)]
+  }
+  const pts = new Float32Array(N * 6 * 3)
+  let j = 0
+  for (let i = 0; i < N; ++i) {
+    // Small rectangular region of the annulus bounded by
+    // r \in [1, 1+dr] and theta \in [t, t+dt], formed by
+    // two triangles. Triangle 1:
+    pts[j++] = innerCircle[i][0]
+    pts[j++] = innerCircle[i][1]
+    pts[j++] = 0
+    pts[j++] = outerCircle[i][0]
+    pts[j++] = outerCircle[i][1]
+    pts[j++] = 0
+    pts[j++] = outerCircle[i + 1][0]
+    pts[j++] = outerCircle[i + 1][1]
+    pts[j++] = 0
+    // Triangle 2:
+    pts[j++] = innerCircle[i][0]
+    pts[j++] = innerCircle[i][1]
+    pts[j++] = 0
+    pts[j++] = outerCircle[i + 1][0]
+    pts[j++] = outerCircle[i + 1][1]
+    pts[j++] = 0
+    pts[j++] = innerCircle[i + 1][0]
+    pts[j++] = innerCircle[i + 1][1]
+    pts[j++] = 0
+  }
+  return pts
 }

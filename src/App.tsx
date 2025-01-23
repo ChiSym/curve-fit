@@ -68,7 +68,7 @@ export default function CurveFit() {
   const [outlier, setOutlier] = useState(Normal(0, 0))
   const [inlierSigma, setInlierSigma] = useState(Normal(0, 0))
 
-  const setStats = (outlierStats, inlierSigmaStats: RunningStats) => {
+  const setStats = (outlierStats: RunningStats, inlierSigmaStats: RunningStats) => {
     setOutlier(outlierStats.summarize())
     setInlierSigma(inlierSigmaStats.summarize())
   }
