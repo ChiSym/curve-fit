@@ -1,3 +1,5 @@
+var <private> seed: vec3u;
+
 fn pcg3d(v: vec3u) -> vec3u {
   // Citation: Mark Jarzynski and Marc Olano, Hash Functions for GPU Rendering,
   // Journal of Computer Graphics Techniques (JCGT), vol. 9, no. 3, 21-38, 2020
