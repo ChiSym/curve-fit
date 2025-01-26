@@ -8,6 +8,7 @@ import {
 } from "three/src/renderers/webgpu/utils/WebGPUConstants.js"
 import { FPSCounter } from "../src/fps_counter"
 import throttle from "lodash.throttle"
+import './stat.css'
 
 async function gpuDevice() {
   if (!navigator.gpu) throw new Error("no WebGPU support")
@@ -24,7 +25,7 @@ class Sampler {
   private readonly presentationFormat: GPUTextureFormat
   private readonly context: GPUCanvasContext
 
-  constructor(device: GPUDevice, canvasElementSelector: string) {
+  constructor(device: GPUDevice, canvasElementSelector: string, expression: string) {
     this.device = device
 
     const canvas = document.querySelector<HTMLCanvasElement>(
@@ -59,7 +60,7 @@ class Sampler {
         seed = id;
         seed.y = u.seed_bias + seed.y;
         let i = id.x;
-        let u = random_normal(0.0, 1.0);
+        let u = ${expression};
         data[i] = u;
       }
     `,
@@ -249,15 +250,15 @@ createRoot(document.getElementById("root")!, {
   },
 }).render(
   <StrictMode>
-    <h1>this is from react</h1>
+    <h1>distribution check</h1>
     <ErrorBoundary fallbackRender={fallbackRender}>
-      <View element="normal-pdf" />
-      <View element="uniform-pdf" />
+      <View elementId="normal-pdf" expression="random_normal(0.0, 1.0)" />
+      <View elementId="uniform-pdf" expression="random_uniform(-3.0, 3.0)"  />
     </ErrorBoundary>
   </StrictMode>,
 )
 
-function View({ element: elementId }: { element: string }) {
+function View({ elementId, expression }: { elementId: string, expression: string }) {
   const [fps, setFPS] = useState(0)
   const [sps, setSPS] = useState(0)
 
@@ -268,16 +269,15 @@ function View({ element: elementId }: { element: string }) {
     const throttledSetter = throttle((fps) => {
       setFPS(fps)
       setSPS(fps * N)
-    })
+    }, 500)
     let stop = false
     gpuDevice()
-      .then((d) => new Sampler(d, "#" + elementId))
+      .then((d) => new Sampler(d, "#" + elementId, expression))
       .then((s) => s.build_pipeline(N, 400))
       .then((draw) => {
         requestAnimationFrame(function frame() {
           draw()
-          const fps = fpsCounter.observe()
-          throttledSetter(fps)
+          throttledSetter(fpsCounter.observe())
           if (stop) {
             console.log("dropping animation frame cycle")
           } else {
@@ -299,10 +299,11 @@ function View({ element: elementId }: { element: string }) {
         ></canvas>
       </div>
       <div>
-        <span>FPS: </span>
+        <span className="expression">{expression}</span>
+        <span style={{paddingLeft: '1em'}}>FPS: </span>
         <span>{fps}</span>
         <span style={{paddingLeft: '1em'}}>Samples: </span>
-        <span>{(sps/1e6).toFixed(1)+'M'}</span>
+        <span>{(sps/1e6).toFixed(1)+'M/s'}</span>
       </div>
     </div>
   )
