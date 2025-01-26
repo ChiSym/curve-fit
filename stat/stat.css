@@ -1,3 +1,9 @@
 span.expression {
     font-family: monospace;
 }
+
+.log-error {
+  color: #a00;
+  font-family: monospace;
+}
+

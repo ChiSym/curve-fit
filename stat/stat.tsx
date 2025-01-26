@@ -138,7 +138,7 @@ class Sampler {
     const m = this.device.createShaderModule({ label, code })
     m.getCompilationInfo().then((info) =>
       info.messages.forEach((msg) =>
-        console.log(`${msg.type} ${msg.lineNum}:${msg.linePos} ${msg.message}`),
+        log("error", `${msg.type} ${msg.lineNum}:${msg.linePos} ${msg.message}`),
       ),
     )
     return m
@@ -325,4 +325,17 @@ function fallbackRender(fb: FallbackProps): ReactNode {
       <pre>{fb.error.message}</pre>
     </div>
   )
+}
+
+function log(level: string, message: unknown): void {
+  if (level === "error") {
+    console.error(message)
+  } else {
+    console.info(message)
+  }
+  const d = document.createElement("div")
+  d.className = "log-" + level
+  const t = document.createTextNode(message + "")
+  d.appendChild(t)
+  document.querySelector("#root")?.appendChild(d)
 }
