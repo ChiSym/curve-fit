@@ -1,3 +1,4 @@
+import { FPSCounter } from "./fps_counter.ts"
 import {
   GPGPU_Inference,
   InferenceParameters,
@@ -31,7 +32,7 @@ export class Animator {
   private gpu: GPGPU_Inference
   private result: InferenceResult
   vizInlierSigma: boolean = false
-  private frameTimeBuf: number[] = []
+  private readonly fpsCounter: FPSCounter = new FPSCounter()
 
   constructor(
     modelParameters: TypedObject<XDistribution>,
@@ -123,7 +124,7 @@ export class Animator {
   public Reset() {
     this.result.selectedModels = []
     this.totalFailedSamples = 0
-    this.frameTimeBuf.length = 0
+    this.fpsCounter.reset()
   }
 
   public awaitResult() {
@@ -164,14 +165,9 @@ export class Animator {
       pOutlierStats.observe(m.p_outlier)
       inlierSigmaStats.observe(m.inlier_sigma)
     }
-    const now = performance.now()
-    this.frameTimeBuf.push(now)
-    while (this.frameTimeBuf.length && this.frameTimeBuf[0] < now - 1000)
-      this.frameTimeBuf.shift()
-    const fps = this.frameTimeBuf.length
     const info = {
       totalFailedSamples: this.totalFailedSamples,
-      fps: fps,
+      fps: this.fpsCounter.observe(),
       autoSIR: this.autoSIR,
       autoDrift: this.autoDrift,
       pOutlierStats: pOutlierStats,

@@ -1,4 +1,4 @@
-import { ReactNode, StrictMode, useEffect } from "react"
+import { ReactNode, StrictMode, useEffect, useState } from "react"
 import { createRoot } from "react-dom/client"
 import { ErrorBoundary, FallbackProps } from "react-error-boundary"
 import statLib from "./stat-lib.wgsl?raw"
@@ -6,6 +6,8 @@ import {
   GPULoadOp,
   GPUStoreOp,
 } from "three/src/renderers/webgpu/utils/WebGPUConstants.js"
+import { FPSCounter } from "../src/fps_counter"
+import throttle from "lodash.throttle"
 
 async function gpuDevice() {
   if (!navigator.gpu) throw new Error("no WebGPU support")
@@ -14,17 +16,40 @@ async function gpuDevice() {
   return await adapter.requestDevice()
 }
 
-async function main() {
-  const device = await gpuDevice()
-  const sampleNormal = device.createShaderModule({
-    label: "initial foray",
-    code: /* wgsl */ `
+class Sampler {
+  private readonly device: GPUDevice
+  private readonly generate_normal: GPUShaderModule
+  private readonly compute_histogram: GPUShaderModule
+  private readonly render_histogram: GPUShaderModule
+  private readonly presentationFormat: GPUTextureFormat
+  private readonly context: GPUCanvasContext
+
+  constructor(device: GPUDevice, canvasElementSelector: string) {
+    this.device = device
+
+    const canvas = document.querySelector<HTMLCanvasElement>(
+      canvasElementSelector,
+    )
+    console.log("canvas=", canvas)
+    if (!canvas) throw Error("canvas not found")
+    this.context = canvas.getContext("webgpu") as GPUCanvasContext
+    if (!this.context) throw Error("no webgpu context")
+    canvas.width = canvas.height = 400
+    this.presentationFormat = navigator.gpu.getPreferredCanvasFormat()
+    this.context.configure({ device, format: this.presentationFormat })
+
+    this.generate_normal = this.compile(
+      "generate normal",
+      `
       ${statLib}
       // =======
 
-      @group(0)
-      @binding(0)
-      var <storage, read_write> data: array<f32>;
+      @group(0) @binding(0) var <storage, read_write> data: array<f32>;
+      @group(0) @binding(1) var <uniform> u: Uniforms;
+
+      struct Uniforms {
+        seed_bias: u32,
+      };
 
       @compute
       @workgroup_size(1)
@@ -32,60 +57,17 @@ async function main() {
         @builtin(global_invocation_id) id: vec3u
       ) {
         seed = id;
+        seed.y = u.seed_bias + seed.y;
         let i = id.x;
         let u = random_normal(0.0, 1.0);
         data[i] = u;
       }
     `,
-  })
-  const compInfo = await sampleNormal.getCompilationInfo()
-  compInfo.messages.forEach((m) =>
-    console.log(`${m.type} ${m.lineNum}:${m.linePos} ${m.message}`),
-  )
-  const N = 50000
+    )
 
-  const t0 = performance.now()
-  const pipeline = device.createComputePipeline({
-    label: "initial pipeline",
-    layout: "auto",
-    compute: {
-      module: sampleNormal,
-    },
-  })
-  const output = new Float32Array(N)
-  const workBuffer = device.createBuffer({
-    label: "work buffer",
-    size: output.byteLength,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-  })
-  // const resultBuffer = device.createBuffer({
-  //   label: 'result buffer',
-  //   size: output.byteLength,
-  //   usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-  // })
-  const bindGroup = device.createBindGroup({
-    label: "bind group for work buffer",
-    layout: pipeline.getBindGroupLayout(0),
-    entries: [{ binding: 0, resource: { buffer: workBuffer } }],
-  })
-  const encoder = device.createCommandEncoder({
-    label: "initial foray encoder",
-  })
-  const pass = encoder.beginComputePass({
-    label: "initial foray pass",
-  })
-  pass.setPipeline(pipeline)
-  pass.setBindGroup(0, bindGroup)
-  pass.dispatchWorkgroups(output.length)
-  pass.end()
-
-  // TODO: remove this when we get the shaders joined together
-  //encoder.copyBufferToBuffer(workBuffer, 0, resultBuffer, 0, resultBuffer.size)
-
-  // ==================================================================
-  const histo = device.createShaderModule({
-    label: "histogram",
-    code: `
+    this.compute_histogram = this.compile(
+      "compute histogram",
+      `
       @group(0) @binding(0) var<storage, read_write> data: array<f32>;
       @group(0) @binding(1) var<uniform> u: Uniforms;
       @group(0) @binding(2) var<storage, read_write> bins: array<atomic<u32>>;
@@ -108,66 +90,11 @@ async function main() {
         atomicAdd(&bins[bin], 1u);
       }
     `,
-  })
-  histo
-    .getCompilationInfo()
-    .then((info) =>
-      info.messages.forEach((m) =>
-        console.log(`${m.type} ${m.lineNum}:${m.linePos} ${m.message}`),
-      ),
     )
-  const histoPipeline = device.createComputePipeline({
-    label: "histo pipeline",
-    layout: "auto",
-    compute: {
-      module: histo,
-    },
-  })
-  console.log(histoPipeline)
-  const M = 400
-  const bins = new Uint32Array(M)
-  const binBuffer = device.createBuffer({
-    label: "bin buffer",
-    size: bins.byteLength,
-    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-  })
-  const uniformBuffer = device.createBuffer({
-    size: 8, // 2 * f32,
-    usage: GPUBufferUsage.UNIFORM,
-    mappedAtCreation: true,
-  })
-  new Float32Array(uniformBuffer.getMappedRange()).set([-3, 3])
-  uniformBuffer.unmap()
 
-  const binBindGroup = device.createBindGroup({
-    label: "bind group for histogram",
-    layout: histoPipeline.getBindGroupLayout(0),
-    entries: [
-      { binding: 0, resource: { buffer: workBuffer } },
-      { binding: 1, resource: { buffer: uniformBuffer } },
-      { binding: 2, resource: { buffer: binBuffer } },
-    ],
-  })
-
-  const pass2 = encoder.beginComputePass({ label: "histo pass" })
-  pass2.setPipeline(histoPipeline)
-  pass2.setBindGroup(0, binBindGroup)
-  pass2.dispatchWorkgroups(N)
-  pass2.end()
-
-  // ==================================================================
-  const canvas = document.querySelector<HTMLCanvasElement>("#normal-pdf")!
-  const context = canvas?.getContext("webgpu")
-  canvas.width = 400
-  canvas.height = 400
-  const presentationFormat = navigator.gpu.getPreferredCanvasFormat()
-  context?.configure({
-    device,
-    format: presentationFormat,
-  })
-  const render = device.createShaderModule({
-    label: "render",
-    code: `
+    this.render_histogram = this.compile(
+      "render histogram",
+      `
       @vertex fn vs(
         @builtin(vertex_index) vertexIndex: u32
       ) -> @builtin(position) vec4f {
@@ -192,101 +119,128 @@ async function main() {
           return vec4f(0.0, 0.0, 0.4, 0.0);
         }
       }
-
-      // @group(0) @binding(0) var<storage, read_write> data: array<f32>;
-      // @group(0) @binding(1) var<uniform> u: Uniforms;
-      // @group(0) @binding(2) var<storage, read_write> bins: array<atomic<u32>>;
-
-      // struct Uniforms {
-      //   left: f32,
-      //   right: f32,
-      // };
-
-      // @compute
-      // @workgroup_size(1)
-      // fn compute(
-      //   @builtin(global_invocation_id) id: vec3u
-      // ) {
-      //   let i = id.x;
-      //   let d: f32 = data[i];
-      //   if (d < u.left || d > u.right) { return; }
-      //   let w: f32 = u.right - u.left;
-      //   let bin: u32 = u32((d - u.left) / w * f32(arrayLength(&bins)));
-      //   atomicAdd(&bins[bin], 1u);
-      // }
     `,
-  })
-  render
-    .getCompilationInfo()
-    .then((info) =>
-      info.messages.forEach((m) =>
-        console.log(`${m.type} ${m.lineNum}:${m.linePos} ${m.message}`),
+    )
+  }
+
+  private compile(label: string, code: string): GPUShaderModule {
+    const m = this.device.createShaderModule({ label, code })
+    m.getCompilationInfo().then((info) =>
+      info.messages.forEach((msg) =>
+        console.log(`${msg.type} ${msg.lineNum}:${msg.linePos} ${msg.message}`),
       ),
     )
-  const renderPipeline = device.createRenderPipeline({
-    label: "render pipeline",
-    layout: "auto",
-    vertex: { module: render },
-    fragment: {
-      module: render,
-      targets: [{ format: presentationFormat }],
-    },
-  })
-  const renderPassDescriptor = {
-    label: "render pass desc",
-    colorAttachments: [
+    return m
+  }
+
+  public build_pipeline(N: number, M: number) {
+    const generate = this.device.createComputePipeline({
+      label: "generate pipeline",
+      layout: "auto",
+      compute: {
+        module: this.generate_normal,
+      },
+    })
+    const dataBuffer = this.device.createBuffer({
+      label: "data buffer",
+      size: N * Float32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.STORAGE,
+    })
+    const uBuffer1 = this.device.createBuffer({
+      size: Uint32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      //mappedAtCreation: true,
+    })
+    //new Uint32Array(uBuffer1.getMappedRange()).set([1])
+    //uBuffer1.unmap()
+    const gBindGroup = this.device.createBindGroup({
+      label: "generate bind group",
+      layout: generate.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: dataBuffer } },
+        { binding: 1, resource: { buffer: uBuffer1 } },
+      ],
+    })
+    // ----------------------------------------------------------------
+    const histCompute = this.device.createComputePipeline({
+      label: "compute histogram",
+      layout: "auto",
+      compute: { module: this.compute_histogram },
+    })
+    const binBuffer = this.device.createBuffer({
+      label: "bin buffer",
+      size: M * Uint32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    })
+    const uBuffer2 = this.device.createBuffer({
+      size: 2 * Float32Array.BYTES_PER_ELEMENT,
+      usage: GPUBufferUsage.UNIFORM,
+      mappedAtCreation: true,
+    })
+    new Float32Array(uBuffer2.getMappedRange()).set([-3, 3])
+    uBuffer2.unmap()
+    const binBindGroup = this.device.createBindGroup({
+      label: "bind compute histogram",
+      layout: histCompute.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: dataBuffer } },
+        { binding: 1, resource: { buffer: uBuffer2 } },
+        { binding: 2, resource: { buffer: binBuffer } },
+      ],
+    })
+    // ----------------------------------------------------------------
+    const render = this.device.createRenderPipeline({
+      label: "render histogram",
+      layout: "auto",
+      vertex: { module: this.render_histogram },
+      fragment: {
+        module: this.render_histogram,
+        targets: [{ format: this.presentationFormat }],
+      },
+    })
+    const renderBind = this.device.createBindGroup({
+      label: "bind group for render",
+      layout: render.getBindGroupLayout(0),
+      entries: [{ binding: 0, resource: { buffer: binBuffer } }],
+    })
+
+    const colorAttachments = [
       {
-        view: context!.getCurrentTexture().createView(),
+        view: this.context.getCurrentTexture().createView(), // TODO: can we precompute this?
         clearValue: [0.3, 0.3, 0.3, 1],
         loadOp: GPULoadOp.Clear,
         storeOp: GPUStoreOp.Store,
       },
-    ],
+    ]
+
+    const seed = new Uint32Array([10])
+
+    return () => {
+      const encoder = this.device.createCommandEncoder({
+        label: "stat pipeline encoder",
+      })
+      const p1 = encoder.beginComputePass({ label: "generate pass" })
+      p1.setPipeline(generate)
+      p1.setBindGroup(0, gBindGroup)
+      p1.dispatchWorkgroups(N)
+      p1.end()
+      this.device.queue.writeBuffer(uBuffer1, 0, seed)
+      encoder.clearBuffer(binBuffer)
+      const p2 = encoder.beginComputePass({ label: "histogram compute pass" })
+      p2.setPipeline(histCompute)
+      p2.setBindGroup(0, binBindGroup)
+      p2.dispatchWorkgroups(N)
+      p2.end()
+      colorAttachments[0].view = this.context.getCurrentTexture().createView()
+      const p3 = encoder.beginRenderPass({ colorAttachments })
+      p3.setPipeline(render)
+      p3.setBindGroup(0, renderBind)
+      p3.draw(6)
+      p3.end()
+      seed.set([seed[0] + 1])
+      this.device.queue.submit([encoder.finish()])
+    }
   }
-
-  const pass3 = encoder.beginRenderPass(renderPassDescriptor)
-
-  const renderBindGroup = device.createBindGroup({
-    label: "bind group for render",
-    layout: renderPipeline.getBindGroupLayout(0),
-    entries: [{ binding: 0, resource: { buffer: binBuffer } }],
-  })
-
-  pass3.setPipeline(renderPipeline)
-  pass3.setBindGroup(0, renderBindGroup)
-  pass3.draw(6)
-  pass3.end()
-
-  // ==================================================================
-
-  const binOutBuffer = device.createBuffer({
-    label: "bin out buffer",
-    size: bins.byteLength,
-    usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-  })
-
-  encoder.copyBufferToBuffer(binBuffer, 0, binOutBuffer, 0, binBuffer.size)
-
-  const commandBuffer = encoder.finish()
-  device.queue.submit([commandBuffer])
-
-  // await resultBuffer.mapAsync(GPUMapMode.READ)
-  // const result = new Float32Array(resultBuffer.getMappedRange(0, resultBuffer.size))
-  // const r = result.slice()
-  // resultBuffer.unmap()
-
-  await binOutBuffer.mapAsync(GPUMapMode.READ)
-  const t1 = performance.now()
-  console.log("perf", t1 - t0, (1000 * N) / (t1 - t0))
-  const binOuts = new Uint32Array(
-    binOutBuffer.getMappedRange(0, binOutBuffer.size),
-  )
-  const bs = binOuts.slice()
-  binOutBuffer.unmap()
-  const bTot = bs.reduce((a, b) => a + b)
-  console.log("bs", bs)
-  console.log("bTot", bTot)
-  return bs
 }
 
 createRoot(document.getElementById("root")!, {
@@ -297,30 +251,62 @@ createRoot(document.getElementById("root")!, {
   <StrictMode>
     <h1>this is from react</h1>
     <ErrorBoundary fallbackRender={fallbackRender}>
-      <Thing />
+      <View element="normal-pdf" />
+      <View element="uniform-pdf" />
     </ErrorBoundary>
   </StrictMode>,
 )
 
-function Thing() {
+function View({ element: elementId }: { element: string }) {
+  const [fps, setFPS] = useState(0)
+  const [sps, setSPS] = useState(0)
+
   useEffect(() => {
     console.log("effect")
-    //main().then(x => setValue(x.join(', ')))
-    main().then(() => {
-      console.log("done")
+    const fpsCounter = new FPSCounter()
+    const N = 50000
+    const throttledSetter = throttle((fps) => {
+      setFPS(fps)
+      setSPS(fps * N)
     })
-  })
+    let stop = false
+    gpuDevice()
+      .then((d) => new Sampler(d, "#" + elementId))
+      .then((s) => s.build_pipeline(N, 400))
+      .then((draw) => {
+        requestAnimationFrame(function frame() {
+          draw()
+          const fps = fpsCounter.observe()
+          throttledSetter(fps)
+          if (stop) {
+            console.log("dropping animation frame cycle")
+          } else {
+            requestAnimationFrame(frame)
+          }
+        })
+      })
+    return () => {
+      stop = true
+    }
+  }, [])
 
   return (
-    <div style={{ width: 400, height: 400 }}>
-      <canvas
-        id="normal-pdf"
-        style={{ width: "100%", height: "100%" }}
-      ></canvas>
+    <div>
+      <div style={{ width: 400, height: 400 }}>
+        <canvas
+          id={elementId}
+          style={{ width: "100%", height: "100%" }}
+        ></canvas>
+      </div>
+      <div>
+        <span>FPS: </span>
+        <span>{fps}</span>
+        <span style={{paddingLeft: '1em'}}>Samples: </span>
+        <span>{(sps/1e6).toFixed(1)+'M'}</span>
+      </div>
     </div>
   )
 }
-
 function fallbackRender(fb: FallbackProps): ReactNode {
   return (
     <div className={"log-error"}>
