@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import jax.random
 from genjax import Pytree
 from genjax.core import GenerativeFunctionClosure, GenerativeFunction
-from genjax.typing import Callable, FloatArray, PRNGKey, ArrayLike, Tuple, List
+from genjax.typing import Callable, FloatArray, PRNGKey, ArrayLike, Any
 
 
 class Block:
@@ -18,7 +18,7 @@ class Block:
     from the underlying distribution."""
 
     gf: GenerativeFunctionClosure
-    jitted_sample: Callable
+    jitted_sample: Callable[[PRNGKey, tuple], Any]
 
     def __init__(self, gf):
         self.gf = gf
@@ -38,7 +38,7 @@ class Block:
     def __matmul__(self, b: "Block"):
         return Compose(self, b)
 
-    def address_segments(self) -> Generator[Tuple, None, None]:
+    def address_segments(self) -> Generator[tuple, None, None]:
         raise NotImplementedError()
 
 
@@ -200,9 +200,9 @@ class CurveFit:
 
     gf: GenerativeFunction
     curve: Block
-    jitted_importance: Callable
-    coefficient_paths: List[Tuple]
-    categorical_sampler: Callable
+    jitted_importance: Callable[[PRNGKey, genjax.ChoiceMap, tuple], Any]
+    coefficient_paths: list[tuple]
+    categorical_sampler: Callable[[PRNGKey, FloatArray], FloatArray]
 
     def __init__(
         self,

@@ -1,5 +1,6 @@
-import { XDistribution } from "./App"
+import { Model } from "./model"
 import { importanceShader } from "./shaders"
+import { XDistribution } from "./stats"
 import { TypedObject } from "./utils"
 import { WGL2Helper } from "./webgl"
 
@@ -9,14 +10,6 @@ export interface ResultBatch {
   p_outlier: Float32Array
   inlier_sigma: Float32Array
   outlier: Uint32Array
-}
-
-interface Model {
-  model: Float32Array
-  outlier: number
-  log_weight: number
-  p_outlier: number
-  inlier_sigma: number
 }
 
 export interface ModelParameters {
@@ -292,16 +285,16 @@ export class GPGPU_Inference {
         if (accumulatedProb >= z) break
       }
       if (targetIndex < weights.length) {
-        selectedModels[modelIndex++] = {
-          model: results.model.slice(
+        selectedModels[modelIndex++] = new Model(
+          results.model.slice(
             targetIndex * this.nParameters,
             targetIndex * this.nParameters + this.nParameters,
           ),
-          outlier: results.outlier[targetIndex],
-          p_outlier: results.p_outlier[targetIndex],
-          inlier_sigma: results.inlier_sigma[targetIndex],
-          log_weight: results.weight[targetIndex],
-        }
+          results.outlier[targetIndex],
+          results.weight[targetIndex],
+          results.p_outlier[targetIndex],
+          results.inlier_sigma[targetIndex],
+        )
       } else {
         // log('info', `oddly enough, the weights table ran out of probability for ${z} : ${accumulated_prob}`)
         // the above happens more often than I thought it would.
@@ -323,33 +316,6 @@ export class GPGPU_Inference {
       failedSamples,
     }
   }
-
-  // private drift(models: Model[], mParams: ModelParameters, driftScale: number) {
-  //   // prototype of drift in JS before shader implementation
-
-  //   function random_normal() {
-  //     const u1 = 1 - Math.random()
-  //     const u2 = Math.random()
-  //     const mag = Math.sqrt(-2 * Math.log(u1))
-  //     return mag * Math.cos(2 * Math.PI * u2)
-  //   }
-
-  //   function evaluate(coefficients: Float32Array, x: number) {
-  //     const y_poly =
-  //       coefficients[0] + x * coefficients[1] + x * x * coefficients[2]
-  //     const y_periodic =
-  //       coefficients[4] + Math.sin(coefficients[5] + coefficients[3] * x)
-  //     return y_poly + y_periodic
-  //   }
-
-  //   const xs = mParams.points.map((p) => p[0])
-
-  //   for (const m of models) {
-  //     const parameters = m.model
-  //     const drifted = parameters.map((v) => v + driftScale * random_normal())
-  //     const drifted_ys = xs.map((x) => evaluate(drifted, x))
-  //   }
-  // }
 
   cleanup(): void {
     this.wgl.deleteBuffer(this.seedBuf)

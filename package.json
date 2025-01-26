@@ -7,25 +7,31 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "jest"
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
     "@lezer/common": "^1.0.0",
+    "@types/jest": "^29.5.13",
     "@types/katex": "^0.16.7",
     "@types/lodash.throttle": "^4.1.9",
     "@types/node": "^18.0.5",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "@types/three": "^0.172.0",
     "@vitejs/plugin-react": "^4.3.1",
-    "@webgpu/types": "^0.1.44",
-    "eslint": "^9.9.1",
+    "@webgpu/types": "^0.1.53",
+    "eslint": "^9.18.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
+    "jest": "^29.7.0",
     "prettier": "^3.2.5",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
     "typescript": "^5.5.3",
-    "typescript-eslint": "^8.0.1",
+    "typescript-eslint": "^8.21.0",
     "vite": "^5.4.1",
     "vite-plugin-checker": "^0.7.2",
     "vite-plugin-eslint": "^1.8.1",
@@ -34,23 +40,14 @@
     "vite-plugin-wasm": "^3.3.0"
   },
   "dependencies": {
-    "@use-gpu/inspect": "^0.12.0-rc.3",
-    "@use-gpu/inspect-gpu": "^0.12.0-rc.3",
-    "@use-gpu/layout": "^0.12.0-rc.3",
-    "@use-gpu/live": "^0.12.0-rc.3",
-    "@use-gpu/parse": "^0.12.0-rc.3",
-    "@use-gpu/plot": "^0.12.0-rc.3",
-    "@use-gpu/react": "^0.12.0-rc.3",
-    "@use-gpu/shader": "^0.12.0-rc.3",
-    "@use-gpu/traits": "^0.12.0-rc.3",
-    "@use-gpu/webgpu": "^0.12.0-rc.3",
-    "@use-gpu/wgsl-loader": "^0.12.0-rc.3",
-    "@use-gpu/workbench": "^0.12.0-rc.3",
+    "@react-three/drei": "^9.121.2",
+    "@react-three/fiber": "^8.17.12",
     "katex": "^0.16.11",
     "lodash.throttle": "^4.1.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-error-boundary": "^4.0.13",
-    "react-gauge-component": "^1.2.51"
+    "react-gauge-component": "^1.2.51",
+    "three": "^0.172.0"
   }
 }

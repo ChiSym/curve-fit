@@ -1,67 +1,18 @@
 import "./App.css"
 import { Animator, InferenceReport } from "./animator.ts"
 import { useCallback, useState, useRef, ChangeEvent, useEffect } from "react"
-import throttle from "lodash.throttle"
 import katex from "katex"
-import { InferenceParameters, InferenceResult } from "./gpgpu.ts"
-import { RunningStats } from "./stats.ts"
+import { InferenceParameters } from "./gpgpu.ts"
+import { Normal, RunningStats, XDistribution } from "./stats.ts"
 import { TypedObject } from "./utils"
-import { Component } from "./live.tsx"
-import { LiveCanvas } from "@use-gpu/react"
 import GaugeComponent from "react-gauge-component"
-
-class DistributionShape {
-  public readonly name: string
-  public readonly parameterName: string[]
-  constructor(name: string, parameterName: string[]) {
-    this.name = name
-    this.parameterName = parameterName
-  }
-}
-
-const NormalDistributionShape = new DistributionShape("normal", ["mu", "sigma"])
+import { Plot } from "./plot"
+import { Canvas } from "@react-three/fiber"
+import throttle from "lodash.throttle"
 
 // Selector values for the number of importance samples to draw per frame
 const Ns = [100, 1000, 5000, 10000, 50000, 100000]
 const maxN = Math.max(...Ns)
-
-export class XDistribution {
-  public readonly shape: DistributionShape
-  public readonly parameters: Map<string, number>
-
-  constructor(shape: DistributionShape, parameters: number[]) {
-    this.shape = shape
-    if (parameters.length != this.shape.parameterName.length) {
-      throw new Error(
-        `incorrect number of paramters for ${this.shape.name} distribution: ${parameters.length} != ${this.shape.parameterName.length}`,
-      )
-    }
-    this.parameters = new Map()
-    for (let i = 0; i < parameters.length; ++i) {
-      this.parameters.set(this.shape.parameterName[i], parameters[i])
-    }
-  }
-  public get(pName: string): number {
-    return this.parameters.get(pName)!
-  }
-  public set(pName: string, value: number) {
-    return this.parameters.set(pName, value)
-  }
-  public assoc(pName: string, value: number) {
-    const ret = this.clone()
-    ret.set(pName, value)
-    return ret
-  }
-  public clone(): XDistribution {
-    return new XDistribution(this.shape, Array.from(this.parameters.values()))
-  }
-  public getParameterNames(): string[] {
-    return this.shape.parameterName
-  }
-}
-
-export const Normal = (mu: number, sigma: number) =>
-  new XDistribution(NormalDistributionShape, [mu, sigma])
 
 export const modelParams: TypedObject<XDistribution> = {
   a_0: Normal(0, 2),
@@ -79,7 +30,7 @@ const defaultInferenceParameters: InferenceParameters = {
 }
 
 export default function CurveFit() {
-  const animatorRef = useRef<Animator | null>(null)
+  const animatorRef = useRef<Animator>(null!)
 
   const [inferenceParameters, setInferenceParameters] = useState(
     defaultInferenceParameters,
@@ -105,30 +56,25 @@ export default function CurveFit() {
 
   const [ips, setIps] = useState(0.0)
   const [fps, setFps] = useState(0.0)
-  const [visualizeInlierSigma, setVisualizeInlierSigma] = useState(false)
+  const [vizInlierSigma, setVisualizeInlierSigma] = useState(false)
   const [autoSIR, setAutoSIR] = useState(false)
+  //const [autoDrift, setAutoDrift] = useState(false)
 
   function modelChange(k1: string, k2: string, v: number) {
     setModelState({ ...modelState, [k1]: modelState[k1]!.assoc(k2, v) })
-    animatorRef.current?.setModelParameters(modelState)
+    animatorRef.current.setModelParameters(modelState)
   }
 
   const [outlier, setOutlier] = useState(Normal(0, 0))
   const [inlierSigma, setInlierSigma] = useState(Normal(0, 0))
 
-  const setStats = throttle((outlierStats, inlierSigmaStats: RunningStats) => {
+  const setStats = (outlierStats: RunningStats, inlierSigmaStats: RunningStats) => {
     setOutlier(outlierStats.summarize())
     setInlierSigma(inlierSigmaStats.summarize())
-  }, 250)
-
-  const throttledSetIps = throttle(setIps, 500)
-  const throttledSetFps = throttle(setFps, 500)
-  const throttledSetPosteriorState = throttle(() => {
-    setPosteriorState(animatorRef.current?.getPosterior() || {})
-  }, 500)
+  }
 
   function SIR_Update() {
-    const s = animatorRef.current?.getPosterior()
+    const s = animatorRef.current.getPosterior()
     if (s) {
       setModelState(s)
       setPosteriorState(s)
@@ -136,39 +82,38 @@ export default function CurveFit() {
     }
   }
 
-  const [inferenceResult, setInferenceResult] = useState<InferenceResult>({
-    selectedModels: [],
-    ips: 0,
-    failedSamples: 0,
-  })
-
   function setter(data: InferenceReport) {
     // This function is handed to the inference loop, which uses it to convey summary data
     // back to the UI.
     setEmptyPosterior(data.totalFailedSamples)
-    throttledSetIps(data.inferenceResult.ips)
-    throttledSetFps(data.fps)
+    setIps(data.inferenceResult.ips)
+    setFps(data.fps)
     setStats(data.pOutlierStats, data.inlierSigmaStats)
-    if (data.autoSIR) {
-      SIR_Update()
-    } else {
-      throttledSetPosteriorState()
-    }
-    setInferenceResult(data.inferenceResult)
+    setPosteriorState(animatorRef.current.getPosterior())
   }
 
   useEffect(() => {
+    const tSetter = throttle(setter, 500)
+
+    function callback(r: InferenceReport) {
+      if (r.autoSIR) {
+        SIR_Update()
+      } else if (r.autoDrift) {
+        animatorRef.current.Drift()
+      }
+      tSetter(r)
+    }
     const a = (animatorRef.current = new Animator(
       modelParams,
       defaultInferenceParameters,
       maxN,
-      setter,
+      callback,
     ))
     a.setInferenceParameters(inferenceParameters)
     a.setModelParameters(modelParams)
     a.setPoints(points.points)
     a.setComponentEnable(componentEnable)
-    return a.run()
+    //return a.run()
   }, [])
 
   const componentsRef = useCallback((element: HTMLElement | null) => {
@@ -187,6 +132,10 @@ export default function CurveFit() {
     animatorRef.current?.setModelParameters(modelParams)
     animatorRef.current?.Reset()
   }
+
+  // function Drift() {
+  //   animatorRef.current?.Drift()
+  // }
 
   function canvasClick(event: React.MouseEvent<HTMLElement>) {
     const canvas = event.target as HTMLCanvasElement
@@ -209,43 +158,64 @@ export default function CurveFit() {
   return (
     <>
       <div id="inference">
-        <div className="live-canvas" onClick={canvasClick}>
-          <LiveCanvas>
-            {(canvas) => (
-              <Component
-                canvas={canvas}
-                inferenceResult={inferenceResult}
-                points={points.points}
-                visualizeInlierSigma={visualizeInlierSigma}
-              />
-            )}
-          </LiveCanvas>
+        <div id="plot-container">
+          <Canvas id="the-canvas" orthographic onClick={canvasClick}>
+            <ambientLight intensity={0.1} />
+            <directionalLight position={[2, 2, 5]} color="red" />
+            <Plot animatorRef={animatorRef} points={points.points} vizInlierSigma={vizInlierSigma}/>
+          </Canvas>
         </div>
         <div id="inference-gauges">
           <div>
             <GaugeComponent
               id="outlier-gauge"
               className="inference-gauge"
-              value={outlier.get('mu')}
+              value={outlier.get("mu")}
               minValue={0.0}
               maxValue={1.0}
-              labels={{valueLabel: {style: {textShadow: 'none', fill: '#000'},
-              formatTextValue: (v => Number(v).toFixed(2))}}}
-              arc={{subArcs: [{length: 0.33, color: '#0f0'}, {length: 0.33, color: '#ff0'}, {length: 0.33, color:'#f00'}]}} />
-              <span>p<sub>outlier</sub></span>
-              </div>
+              labels={{
+                valueLabel: {
+                  style: { textShadow: "none", fill: "#888" },
+                  formatTextValue: (v) => Number(v).toFixed(2),
+                },
+              }}
+              arc={{
+                subArcs: [
+                  { length: 0.33, color: "#0f0" },
+                  { length: 0.33, color: "#ff0" },
+                  { length: 0.33, color: "#f00" },
+                ],
+              }}
+            />
+            <span>
+              p<sub>outlier</sub>
+            </span>
+          </div>
           <div>
             <GaugeComponent
               id="inlier-sigma-gauge"
               className="inference-gauge"
-              value={inlierSigma.get('mu')}
+              value={inlierSigma.get("mu")}
               minValue={0.0}
               maxValue={1.0}
-              labels={{valueLabel: {style: {textShadow: 'none', fill: '#000'},
-              formatTextValue: (v => Number(v).toFixed(2))}}}
-              arc={{subArcs: [{length: 0.33, color: '#0f0'}, {length: 0.33, color: '#ff0'}, {length: 0.33, color:'#f00'}]}} />
-              <span>&sigma;<sub>inlier</sub></span>
-              </div>
+              labels={{
+                valueLabel: {
+                  style: { textShadow: "none", fill: "#888" },
+                  formatTextValue: (v) => Number(v).toFixed(2),
+                },
+              }}
+              arc={{
+                subArcs: [
+                  { length: 0.33, color: "#0f0" },
+                  { length: 0.33, color: "#ff0" },
+                  { length: 0.33, color: "#f00" },
+                ],
+              }}
+            />
+            <span>
+              &sigma;<sub>inlier</sub>
+            </span>
+          </div>
         </div>
       </div>
       <InferenceUI
@@ -330,16 +300,13 @@ export default function CurveFit() {
               ></ComponentParameter>
             ))}
           </ModelComponent>
-          FPS: <span id="fps">{fps}</span>
-          <br />
-          IPS: <span id="ips">{(ips / 1e6).toFixed(2) + " M"}</span>
-          <br />
-
         </div>
       </div>
       <div className="extra-components">
         empty posterior: <span id="empty-posterior">{emptyPosterior}</span>
-        <br />
+        <span style={{paddingLeft: '1em'}}>FPS: </span><span id="fps">{fps}</span>
+        <span style={{paddingLeft: '1em'}}>IPS: </span><span id="ips">{(ips / 1e6).toFixed(2) + " M"}</span>
+        <br/>
         <label>
           <input
             id="pause"
@@ -348,8 +315,7 @@ export default function CurveFit() {
           />
           pause
         </label>
-        &nbsp;&nbsp;
-        <label>
+        <label style={{paddingLeft: "1em"}}>
           <input
             id="auto-SIR"
             type="checkbox"
@@ -362,12 +328,28 @@ export default function CurveFit() {
           />
           Auto-SIR
         </label>
-        &nbsp;&nbsp;
-        <label>
+        {/* <label style={{paddingLeft: "1em"}}>
+          <input
+            id="auto-Drift"
+            type="checkbox"
+            checked={autoDrift}
+            onChange={(e) => {
+              const b: boolean = e.target.checked
+              setAutoDrift(b)
+              animatorRef.current?.setAutoDrift(b)
+            }}
+          />
+          Auto-Drift
+        </label> */}
+        <label style={{paddingLeft: "1em"}}>
           <input
             id="visualizeInlierSigma"
             type="checkbox"
-            onChange={(e) => setVisualizeInlierSigma(e.target.checked)}
+            onChange={(e) => {
+              const b = e.target.checked
+              setVisualizeInlierSigma(b)
+              animatorRef.current!.vizInlierSigma = b
+            }}
           />
           viz inlier sigma
         </label>
@@ -379,6 +361,9 @@ export default function CurveFit() {
         <button id="reset-priors" type="button" onClick={Reset}>
           Reset
         </button>
+        {/* <button id="drift" type="button" onClick={() => Drift()}>
+          Drift
+        </button> */}
       </div>
     </>
   )

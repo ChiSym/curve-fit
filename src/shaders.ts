@@ -264,14 +264,15 @@ export function importanceShader(nParameters: number): string {
     for (uint i = 0u; i < N_POINTS; ++i) {
       bool outlier = flip(seed, p_outlier);
       outlier_bits = outlier_bits | (uint(outlier) << i);
-      float y_model = evaluate_model(polynomial_parameters, periodic_parameters, points[i].x);
       if (outlier) {
+        float y_model = random_uniform(seed, -1.0, 1.0);
         log_w += logpdf_uniform(y_model, -1.0, 1.0);
       } else {
+        float y_model = evaluate_model(polynomial_parameters, periodic_parameters, points[i].x);
         log_w += logpdf_normal(points[i].y, y_model, inlier_sigma);
       }
     }
-    log_w += logpdf_uniform(p_outlier, 0.0, 1.0);
+    log_w += logpdf_uniform(p_outlier, 0.0, 1.0);  // TODO: #define
     out_0 = polynomial_parameters[0];
     out_1 = polynomial_parameters[1];
     out_2 = polynomial_parameters[2];
