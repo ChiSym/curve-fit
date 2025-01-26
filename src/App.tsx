@@ -58,7 +58,7 @@ export default function CurveFit() {
   const [fps, setFps] = useState(0.0)
   const [vizInlierSigma, setVisualizeInlierSigma] = useState(false)
   const [autoSIR, setAutoSIR] = useState(false)
-  const [autoDrift, setAutoDrift] = useState(false)
+  //const [autoDrift, setAutoDrift] = useState(false)
 
   function modelChange(k1: string, k2: string, v: number) {
     setModelState({ ...modelState, [k1]: modelState[k1]!.assoc(k2, v) })
@@ -133,9 +133,9 @@ export default function CurveFit() {
     animatorRef.current?.Reset()
   }
 
-  function Drift() {
-    animatorRef.current?.Drift()
-  }
+  // function Drift() {
+  //   animatorRef.current?.Drift()
+  // }
 
   function canvasClick(event: React.MouseEvent<HTMLElement>) {
     const canvas = event.target as HTMLCanvasElement
@@ -328,7 +328,7 @@ export default function CurveFit() {
           />
           Auto-SIR
         </label>
-        <label style={{paddingLeft: "1em"}}>
+        {/* <label style={{paddingLeft: "1em"}}>
           <input
             id="auto-Drift"
             type="checkbox"
@@ -340,7 +340,7 @@ export default function CurveFit() {
             }}
           />
           Auto-Drift
-        </label>
+        </label> */}
         <label style={{paddingLeft: "1em"}}>
           <input
             id="visualizeInlierSigma"
@@ -361,9 +361,9 @@ export default function CurveFit() {
         <button id="reset-priors" type="button" onClick={Reset}>
           Reset
         </button>
-        <button id="drift" type="button" onClick={() => Drift()}>
+        {/* <button id="drift" type="button" onClick={() => Drift()}>
           Drift
-        </button>
+        </button> */}
       </div>
     </>
   )
