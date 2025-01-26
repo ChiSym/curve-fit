@@ -52,6 +52,15 @@ class Sampler {
         seed_bias: u32,
       };
 
+      fn mixture(u: f32, m0: f32, s0: f32, m1: f32, s1: f32) -> f32 {
+        let r = random_uniform(0.0, 1.0);
+        if (r <= u) {
+          return random_normal(m0, s0);
+        } else {
+          return random_normal(m1, s1);
+        }
+      }
+
       @compute
       @workgroup_size(1)
       fn compute(
@@ -114,7 +123,8 @@ class Sampler {
 
       @fragment fn fs(@builtin(position) p: vec4f) -> @location(0) vec4f {
         let n: u32 = arrayLength(&bins);
-        if (p.y < f32(n - bins[u32(p.x)])) {
+        let b = bins[u32(p.x)];
+        if (p.y < f32(n - b) && b <= n) {
           return vec4f(0.8,0.8,0.8,1.);
         } else {
           return vec4f(0.0, 0.0, 0.4, 0.0);
@@ -254,6 +264,7 @@ createRoot(document.getElementById("root")!, {
     <ErrorBoundary fallbackRender={fallbackRender}>
       <View elementId="normal-pdf" expression="random_normal(0.0, 1.0)" />
       <View elementId="uniform-pdf" expression="random_uniform(-3.0, 3.0)"  />
+      <View elementId="mixture-pdf" expression="mixture(0.4, -1.0, 0.5, 1, 0.5)"  />
     </ErrorBoundary>
   </StrictMode>,
 )
