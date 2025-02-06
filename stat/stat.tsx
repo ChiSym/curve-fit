@@ -67,7 +67,6 @@ class Sampler extends ShaderApp {
     const canvas = document.querySelector<HTMLCanvasElement>(
       canvasElementSelector,
     )
-    console.log("canvas=", canvas)
     if (!canvas) throw Error("canvas not found")
     this.context = canvas.getContext("webgpu") as GPUCanvasContext
     if (!this.context) throw Error("no webgpu context")
@@ -510,7 +509,6 @@ class GoL extends ShaderApp {
 
     return () => {
       if (this.click) {
-        console.log("board reinit")
         initializeBuffer()
         this.click = false
         even = true
@@ -565,7 +563,6 @@ function SetupAnimation(
   setSPS: (x: number) => void,
   ctor: (g: GPUDevice) => ShaderApp,
 ) {
-  console.log("effect")
   const fpsCounter = new FPSCounter()
   const N = 50000
   const throttledSetter = throttle((fps) => {
@@ -604,7 +601,6 @@ function GoLView({
   const [sps, setSPS] = useState(0)
   const appRef = useRef<ShaderApp>()
   useEffect(() => {
-    console.log("effect")
     return SetupAnimation(setFPS, setSPS, (d: GPUDevice) => {
       return (appRef.current = new GoL(d, "#" + elementId))
     })
@@ -646,7 +642,6 @@ function DistributionView({
   const [sps, setSPS] = useState(0)
 
   useEffect(() => {
-    console.log("effect")
     const N = 50000
     return SetupAnimation(
       setFPS,
