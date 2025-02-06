@@ -288,6 +288,7 @@ class GoL extends ShaderApp {
   private readonly presentationFormat: GPUTextureFormat
   private readonly size = 400
   private click = false
+  public density = 0.3
 
   constructor(device: GPUDevice, canvasElementSelector: string) {
     super(device)
@@ -484,7 +485,7 @@ class GoL extends ShaderApp {
     ]
 
     const seed = new Uint32Array([10])
-    const density = new Float32Array([0.3])
+    const density = new Float32Array([this.density])
 
     // Initialize data buffer 0 with random data.
 
@@ -545,7 +546,7 @@ createRoot(document.getElementById("root")!, {
         elementId="normal-pdf"
         expression="random_normal(0.0, 1.0)"
       />
-      <GoLView elementId="gol" expression="GoL(0.2)" />
+      <GoLView elementId="gol" />
       <DistributionView
         elementId="uniform-pdf"
         expression="random_uniform(-3.0, 3.0)"
@@ -592,17 +593,18 @@ function SetupAnimation(
 
 function GoLView({
   elementId,
-  expression,
 }: {
   elementId: string
-  expression: string
 }) {
   const [fps, setFPS] = useState(0)
   const [sps, setSPS] = useState(0)
+  const [density, setDensity] = useState(0.)
   const appRef = useRef<ShaderApp>()
   useEffect(() => {
     return SetupAnimation(setFPS, setSPS, (d: GPUDevice) => {
-      return (appRef.current = new GoL(d, "#" + elementId))
+      const app = appRef.current = new GoL(d, "#" + elementId)
+      setDensity(app.density = 0.3)
+      return app
     })
   }, [])
 
@@ -620,7 +622,7 @@ function GoLView({
         ></canvas>
       </div>
       <div>
-        <span className="expression">{expression}</span>
+        <span className="expression">{`GoL(${density.toFixed(2)})`}</span>
         <span style={{ paddingLeft: "1em" }}>FPS: </span>
         <span>{fps}</span>
         <span style={{ paddingLeft: "1em" }}>Samples: </span>
