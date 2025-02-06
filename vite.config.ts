@@ -13,7 +13,7 @@ export default defineConfig({
   plugins: [
     wasm(),
     virtual({
-      'virtual:version': `export default '${execSync('git describe --tags --always').toString().replace(/\s/, '')}'`
+      "virtual:version": `export default '${execSync("git describe --tags --always").toString().replace(/\s/, "")}'`,
     }),
     topLevelAwait(),
     react(),
@@ -33,9 +33,9 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       input: {
-        stat: resolve(__dirname, 'stat/index.html'),
-        main: resolve(__dirname, './index.html')
-      }
-    }
+        stat: resolve(__dirname, "stat/index.html"),
+        main: resolve(__dirname, "./index.html"),
+      },
+    },
   },
 })

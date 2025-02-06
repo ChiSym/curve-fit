@@ -68,7 +68,10 @@ export default function CurveFit() {
   const [outlier, setOutlier] = useState(Normal(0, 0))
   const [inlierSigma, setInlierSigma] = useState(Normal(0, 0))
 
-  const setStats = (outlierStats: RunningStats, inlierSigmaStats: RunningStats) => {
+  const setStats = (
+    outlierStats: RunningStats,
+    inlierSigmaStats: RunningStats,
+  ) => {
     setOutlier(outlierStats.summarize())
     setInlierSigma(inlierSigmaStats.summarize())
   }
@@ -162,7 +165,11 @@ export default function CurveFit() {
           <Canvas id="the-canvas" orthographic onClick={canvasClick}>
             <ambientLight intensity={0.1} />
             <directionalLight position={[2, 2, 5]} color="red" />
-            <Plot animatorRef={animatorRef} points={points.points} vizInlierSigma={vizInlierSigma}/>
+            <Plot
+              animatorRef={animatorRef}
+              points={points.points}
+              vizInlierSigma={vizInlierSigma}
+            />
           </Canvas>
         </div>
         <div id="inference-gauges">
@@ -304,9 +311,11 @@ export default function CurveFit() {
       </div>
       <div className="extra-components">
         empty posterior: <span id="empty-posterior">{emptyPosterior}</span>
-        <span style={{paddingLeft: '1em'}}>FPS: </span><span id="fps">{fps}</span>
-        <span style={{paddingLeft: '1em'}}>IPS: </span><span id="ips">{(ips / 1e6).toFixed(2) + " M"}</span>
-        <br/>
+        <span style={{ paddingLeft: "1em" }}>FPS: </span>
+        <span id="fps">{fps}</span>
+        <span style={{ paddingLeft: "1em" }}>IPS: </span>
+        <span id="ips">{(ips / 1e6).toFixed(2) + " M"}</span>
+        <br />
         <label>
           <input
             id="pause"
@@ -315,7 +324,7 @@ export default function CurveFit() {
           />
           pause
         </label>
-        <label style={{paddingLeft: "1em"}}>
+        <label style={{ paddingLeft: "1em" }}>
           <input
             id="auto-SIR"
             type="checkbox"
@@ -341,7 +350,7 @@ export default function CurveFit() {
           />
           Auto-Drift
         </label> */}
-        <label style={{paddingLeft: "1em"}}>
+        <label style={{ paddingLeft: "1em" }}>
           <input
             id="visualizeInlierSigma"
             type="checkbox"
