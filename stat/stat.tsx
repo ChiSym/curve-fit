@@ -341,7 +341,7 @@ class GoL extends ShaderApp {
       fn compute(
         @builtin(global_invocation_id) id: vec3u
       ) {
-        let stride: u32 = 400;
+        const stride = 400u;
         let i: u32 = id.x * stride + id.y;
         var n = 0u;
         if (id.x > 0 && data0[i-stride] != 0)        { n += 1; }    // N
@@ -386,7 +386,8 @@ class GoL extends ShaderApp {
       @fragment fn fs(
         @builtin(position) p: vec4f,
       ) -> @location(0) vec4f {
-        if (data[u32(p.x * 400 + p.y)] != 0) {
+
+        if (data[u32(p.x - 0.5) * 400 + u32(p.y - 0.5)] != 0) {
           return vec4f(0,0,0,1);
         } else {
           return vec4f(0.8, 0.8, 0.8, 1.0);
@@ -506,30 +507,33 @@ class GoL extends ShaderApp {
 
     initializeBuffer()
 
-    let even = true
+    let count = 0
 
     return () => {
       if (this.click) {
         initializeBuffer()
         this.click = false
-        even = true
+        count = 0
       }
       const encoder = this.device.createCommandEncoder({
         label: "GoL board udpate encoder",
       })
-      const p1 = encoder.beginComputePass({ label: "generate pass" })
-      p1.setPipeline(update)
-      p1.setBindGroup(0, even ? updateBindGroup0 : updateBindGroup1)
-      p1.dispatchWorkgroups(this.size, this.size)
-      p1.end()
+      if (count > 1) {
+        // allow initial data to show
+        const p1 = encoder.beginComputePass({ label: "generate pass" })
+        p1.setPipeline(update)
+        p1.setBindGroup(0, count & 1 ? updateBindGroup1 : updateBindGroup0)
+        p1.dispatchWorkgroups(this.size, this.size)
+        p1.end()
+      }
       colorAttachments[0].view = this.context.getCurrentTexture().createView()
       const p3 = encoder.beginRenderPass({ colorAttachments })
-      p3.setBindGroup(0, even ? renderBind0 : renderBind1)
+      p3.setBindGroup(0, count & 1 ? renderBind1 : renderBind0)
       p3.setPipeline(render)
       p3.draw(6)
       p3.end()
       this.device.queue.submit([encoder.finish()])
-      even = !even // switch buffers
+      count += 1
     }
   }
 }
@@ -561,14 +565,11 @@ createRoot(document.getElementById("root")!, {
 
 function SetupAnimation(
   setFPS: (x: number) => void,
-  setSPS: (x: number) => void,
   ctor: (g: GPUDevice) => ShaderApp,
 ) {
   const fpsCounter = new FPSCounter()
-  const N = 50000
   const throttledSetter = throttle((fps) => {
     setFPS(fps)
-    setSPS(fps * N)
   }, 500)
   let stop = false
   gpuDevice()
@@ -591,21 +592,23 @@ function SetupAnimation(
   }
 }
 
-function GoLView({
-  elementId,
-}: {
-  elementId: string
-}) {
+function GoLView({ elementId }: { elementId: string }) {
   const [fps, setFPS] = useState(0)
   const [sps, setSPS] = useState(0)
-  const [density, setDensity] = useState(0.)
+  const [density, setDensity] = useState(0)
   const appRef = useRef<ShaderApp>()
   useEffect(() => {
-    return SetupAnimation(setFPS, setSPS, (d: GPUDevice) => {
-      const app = appRef.current = new GoL(d, "#" + elementId)
-      setDensity(app.density = 0.3)
-      return app
-    })
+    return SetupAnimation(
+      (fps) => {
+        setFPS(fps)
+        setSPS(400 * 400 * fps)
+      },
+      (d: GPUDevice) => {
+        const app = (appRef.current = new GoL(d, "#" + elementId))
+        setDensity((app.density = 0.3))
+        return app
+      },
+    )
   }, [])
 
   function onClick() {
@@ -626,7 +629,7 @@ function GoLView({
         <span style={{ paddingLeft: "1em" }}>FPS: </span>
         <span>{fps}</span>
         <span style={{ paddingLeft: "1em" }}>Samples: </span>
-        <span>{(sps / (400 * 400)).toFixed(1) + "M/s"}</span>
+        <span>{(sps / 1e6).toFixed(1) + "M/s"}</span>
         <span style={{ paddingLeft: "1em" }}>click to restart</span>
       </div>
     </div>
@@ -646,8 +649,10 @@ function DistributionView({
   useEffect(() => {
     const N = 50000
     return SetupAnimation(
-      setFPS,
-      setSPS,
+      (fps) => {
+        setFPS(fps)
+        setSPS(N * fps)
+      },
       (d: GPUDevice) => new Sampler(d, "#" + elementId, expression, N, 400),
     )
   }, [])
